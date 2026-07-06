@@ -1,4 +1,4 @@
-const CACHE_NAME = "voz-v5-modelo-por-codigo";
+const CACHE_NAME = "voz-v6-numero-en-cifras";
 const ASSETS = [
   "./",
   "./index.html",

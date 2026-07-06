@@ -286,6 +286,85 @@ function spokenDigit(token) {
   return digits[token] || (/^\d+$/.test(token) ? token : "");
 }
 
+function speechToNumberValue(text) {
+  const normalized = normalizeSpeechText(text);
+  const numericParts = normalized.match(/\d+/g);
+  if (numericParts?.length) return numericParts.join("");
+
+  const tokens = normalized.split(" ").filter((token) => token && token !== "y");
+  const compactDigits = tokens.map(spokenDigit).join("");
+  if (compactDigits && tokens.every((token) => spokenDigit(token))) return compactDigits;
+
+  const values = {
+    cero: 0,
+    uno: 1,
+    un: 1,
+    una: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4,
+    cinco: 5,
+    seis: 6,
+    siete: 7,
+    ocho: 8,
+    nueve: 9,
+    diez: 10,
+    once: 11,
+    doce: 12,
+    trece: 13,
+    catorce: 14,
+    quince: 15,
+    dieciseis: 16,
+    diecisiete: 17,
+    dieciocho: 18,
+    diecinueve: 19,
+    veinte: 20,
+    veintiuno: 21,
+    veintidos: 22,
+    veintitres: 23,
+    veinticuatro: 24,
+    veinticinco: 25,
+    veintiseis: 26,
+    veintisiete: 27,
+    veintiocho: 28,
+    veintinueve: 29,
+    treinta: 30,
+    cuarenta: 40,
+    cincuenta: 50,
+    sesenta: 60,
+    setenta: 70,
+    ochenta: 80,
+    noventa: 90,
+    cien: 100,
+    ciento: 100,
+    doscientos: 200,
+    trescientos: 300,
+    cuatrocientos: 400,
+    quinientos: 500,
+    seiscientos: 600,
+    setecientos: 700,
+    ochocientos: 800,
+    novecientos: 900,
+  };
+
+  let total = 0;
+  let current = 0;
+  let found = false;
+  for (const token of tokens) {
+    if (token === "mil") {
+      total += (current || 1) * 1000;
+      current = 0;
+      found = true;
+      continue;
+    }
+    if (values[token] === undefined) continue;
+    current += values[token];
+    found = true;
+  }
+
+  return found ? String(total + current) : speechToPlainValue(text).replace(/\s+/g, "");
+}
+
 function speechToSerial(text) {
   const tokens = normalizeSpeechText(text).split(" ").filter(Boolean);
   const parts = tokens.map((token) => spokenDigit(token) || token.toUpperCase());
@@ -322,7 +401,7 @@ function speechToModel(text) {
     .split(" ")
     .map(spokenDigit)
     .join("");
-  const numeric = normalized.match(/\b\d+\b/)?.[0] || compactDigits;
+  const numeric = normalized.match(/\b\d+\b/)?.[0] || compactDigits || speechToNumberValue(text);
   const models = {
     1: "ABC 1 KG",
     2: "CO2 2 KG",
@@ -408,7 +487,7 @@ function handleVoiceText(text) {
       setVoiceStatus('Di "numero" y despues el numero del extintor.');
       return;
     }
-    if (numberValue) $("cantidad").value = speechToPlainValue(numberValue).replace(/\s+/g, "");
+    if (numberValue) $("cantidad").value = speechToNumberValue(numberValue);
     voiceStep = "modelo";
     setVoiceStatus('Numero anotado. Ahora di "modelo" y el modelo del extintor.');
     return;
