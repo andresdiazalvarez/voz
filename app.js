@@ -389,20 +389,20 @@ function handleVoiceText(text) {
     }
     if (numberValue) $("cantidad").value = speechToPlainValue(numberValue).replace(/\s+/g, "");
     voiceStep = "modelo";
-    setVoiceStatus('Numero anotado. Ahora di "serie" y el modelo del extintor.');
+    setVoiceStatus('Numero anotado. Ahora di "modelo" y el modelo del extintor.');
     return;
   }
 
   if (voiceStep === "modelo") {
-    const modelValue = captureAfterKeyword(text, "serie");
-    if (!modelValue && !normalized.includes("serie")) {
-      setVoiceStatus('Di "serie" y el modelo del extintor.');
+    const modelValue = captureAfterKeyword(text, "modelo");
+    if (!modelValue && !normalized.includes("modelo")) {
+      setVoiceStatus('Di "modelo" y el modelo del extintor.');
       return;
     }
     if (modelValue) {
       $("modelo").value = speechToPlainValue(modelValue);
-      voiceStep = "numeroSerie";
-      setVoiceStatus("Modelo anotado. Ahora dicta el numero de serie, numero a numero.");
+      voiceStep = "serie";
+      setVoiceStatus('Modelo anotado. Ahora di "serie" y dicta el numero de serie, numero a numero.');
     } else {
       voiceStep = "modeloValor";
       setVoiceStatus("Ahora di el modelo del extintor.");
@@ -412,8 +412,25 @@ function handleVoiceText(text) {
 
   if (voiceStep === "modeloValor") {
     $("modelo").value = speechToPlainValue(text);
-    voiceStep = "numeroSerie";
-    setVoiceStatus("Modelo anotado. Ahora dicta el numero de serie, numero a numero.");
+    voiceStep = "serie";
+    setVoiceStatus('Modelo anotado. Ahora di "serie" y dicta el numero de serie, numero a numero.');
+    return;
+  }
+
+  if (voiceStep === "serie") {
+    const serieValue = captureAfterKeyword(text, "serie");
+    if (!serieValue && !normalized.includes("serie")) {
+      setVoiceStatus('Di "serie" y despues el numero de serie.');
+      return;
+    }
+    if (serieValue) {
+      appendSerial(serieValue);
+      voiceStep = "numeroSerie";
+      setVoiceStatus('Numero de serie anotado. Cuando termines di "fabricacion" y la fecha.');
+    } else {
+      voiceStep = "numeroSerie";
+      setVoiceStatus("Ahora dicta el numero de serie, numero a numero.");
+    }
     return;
   }
 
