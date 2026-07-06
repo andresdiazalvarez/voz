@@ -316,6 +316,27 @@ function speechToPlainValue(text) {
     .trim();
 }
 
+function speechToModel(text) {
+  const normalized = normalizeSpeechText(text);
+  const compactDigits = normalized
+    .split(" ")
+    .map(spokenDigit)
+    .join("");
+  const numeric = normalized.match(/\b\d+\b/)?.[0] || compactDigits;
+  const models = {
+    1: "ABC 1 KG",
+    2: "CO2 2 KG",
+    3: "ABC 3 KG",
+    5: "CO2 5 KG",
+    6: "ABC 6 KG",
+    9: "ABC 9 KG",
+    10: "CO2 10 KG",
+    25: "ABC 25 KG",
+    50: "ABC 50 KG",
+  };
+  return models[numeric] || speechToPlainValue(text);
+}
+
 function speechToYear(text) {
   const normalized = normalizeSpeechText(text);
   const numeric = normalized.match(/\b(19|20)\d{2}\b/);
@@ -400,7 +421,7 @@ function handleVoiceText(text) {
       return;
     }
     if (modelValue) {
-      $("modelo").value = speechToPlainValue(modelValue);
+      $("modelo").value = speechToModel(modelValue);
       voiceStep = "serie";
       setVoiceStatus('Modelo anotado. Ahora di "serie" y dicta el numero de serie, numero a numero.');
     } else {
@@ -411,7 +432,7 @@ function handleVoiceText(text) {
   }
 
   if (voiceStep === "modeloValor") {
-    $("modelo").value = speechToPlainValue(text);
+    $("modelo").value = speechToModel(text);
     voiceStep = "serie";
     setVoiceStatus('Modelo anotado. Ahora di "serie" y dicta el numero de serie, numero a numero.');
     return;
