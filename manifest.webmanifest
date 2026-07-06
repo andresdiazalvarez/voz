@@ -1,0 +1,15 @@
+{
+  "name": "Voz",
+  "short_name": "Voz",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f0eb",
+  "theme_color": "#f9a8d4",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
