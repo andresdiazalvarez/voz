@@ -3,8 +3,8 @@
   "short_name": "Voz",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f3f0eb",
-  "theme_color": "#f9a8d4",
+  "background_color": "#f5f3ff",
+  "theme_color": "#a855f7",
   "icons": [
     {
       "src": "icon.svg",

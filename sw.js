@@ -1,4 +1,4 @@
-const CACHE_NAME = "voz-v1-entrada-voz";
+const CACHE_NAME = "voz-v2-morado";
 const ASSETS = [
   "./",
   "./index.html",

@@ -1,11 +1,11 @@
 :root {
-  --red: #f9a8d4;
-  --red-dark: #f472b6;
-  --paper: #f3f0eb;
+  --red: #a855f7;
+  --red-dark: #9333ea;
+  --paper: #f5f3ff;
   --card: #ffffff;
-  --ink: #282422;
-  --muted: #6f6b66;
-  --line: #ded8d2;
+  --ink: #21162f;
+  --muted: #6d6380;
+  --line: #ddd6fe;
 }
 
 * { box-sizing: border-box; }
@@ -81,7 +81,7 @@ h3 { margin: 0 0 14px; font-size: 22px; }
 }
 
 .stats div {
-  background: #f8f6f3;
+  background: #f1edff;
   border-radius: 18px;
   padding: 16px;
 }
@@ -107,7 +107,7 @@ button {
 .primary {
   width: 100%;
   background: var(--red);
-  color: #3a1028;
+  color: #ffffff;
   margin-top: 10px;
 }
 
@@ -198,8 +198,8 @@ th, td {
 }
 
 th {
-  background: #faf8f5;
-  color: #4f4944;
+  background: #f1edff;
+  color: #4c3b69;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -210,7 +210,7 @@ th {
 
 .editBtn {
   background: var(--red);
-  color: #3a1028;
+  color: #ffffff;
   padding: 10px 14px;
   border-radius: 12px;
   font-size: 14px;
@@ -232,7 +232,7 @@ th {
 .voiceBlock {
   display: grid;
   gap: 14px;
-  background: #faf8f5;
+  background: #f1edff;
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
@@ -258,7 +258,7 @@ th {
 
 .voiceListening {
   border-color: var(--red-dark);
-  box-shadow: 0 0 0 3px rgba(244, 114, 182, .18);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, .22);
 }
 
 label {
@@ -279,7 +279,7 @@ label {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #faf8f5;
+  background: #f1edff;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
@@ -309,8 +309,8 @@ label {
   place-items: center;
   border: 2px dashed #cfc7bf;
   border-radius: 20px;
-  background: #faf8f5;
-  color: #6f6b66;
+  background: #f1edff;
+  color: #6d6380;
   cursor: pointer;
   overflow: hidden;
   padding: 0;
