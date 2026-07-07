@@ -258,6 +258,12 @@ function setPhotoPreview(index, dataUrl) {
   $(`deletePhoto${index + 1}`).disabled = !photo;
 }
 
+function updateLastNumberUsed(currentId = "") {
+  const lastRecord = records.find((record) => record.id !== currentId && safeText(record.cantidad).trim());
+  const value = lastRecord ? safeText(lastRecord.cantidad).trim() : "-";
+  $("lastNumberUsed").textContent = value;
+}
+
 function normalizeSpeechText(text) {
   return safeText(text)
     .toLowerCase()
@@ -421,6 +427,12 @@ function speechToYear(text) {
   const numeric = normalized.match(/\b(19|20)\d{2}\b/);
   if (numeric) return numeric[0];
 
+  const parsedNumber = Number(speechToNumberValue(text));
+  if (Number.isFinite(parsedNumber)) {
+    if (parsedNumber >= 1900 && parsedNumber <= 2099) return String(parsedNumber);
+    if (parsedNumber >= 0 && parsedNumber <= 99) return String(2000 + parsedNumber);
+  }
+
   const compactDigits = normalized
     .split(" ")
     .map(spokenDigit)
@@ -456,7 +468,16 @@ function setSelectValue(id, value) {
   const select = $(id);
   const cleanValue = safeText(value).trim();
   const option = Array.from(select.options).find((item) => item.value === cleanValue);
-  select.value = option ? cleanValue : "";
+  if (option) {
+    select.value = cleanValue;
+    return;
+  }
+  if (/^\d{4}$/.test(cleanValue)) {
+    select.add(new Option(cleanValue, cleanValue));
+    select.value = cleanValue;
+    return;
+  }
+  select.value = "";
 }
 
 function setVoiceStatus(message) {
@@ -663,6 +684,7 @@ function resizePhoto(file) {
 function openForm(id = null) {
   const record = id ? records.find((item) => item.id === id) : null;
   $("recordId").value = record?.id || "";
+  updateLastNumberUsed(record?.id || "");
   $("formTitle").textContent = record ? "Ver y corregir extintor" : "Meter dato nuevo";
   $("formKicker").textContent = record ? "REGISTRO EXISTENTE" : "NUEVO REGISTRO";
   $("deleteBtn").classList.toggle("hidden", !record);

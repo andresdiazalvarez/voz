@@ -80,6 +80,10 @@ h3 { margin: 0 0 14px; font-size: 22px; }
   margin-bottom: 20px;
 }
 
+.dangerTop {
+  margin-bottom: 18px;
+}
+
 .stats div {
   background: #f1edff;
   border-radius: 18px;
@@ -134,6 +138,43 @@ button {
   width: auto;
   min-width: 92px;
   margin-bottom: 24px;
+}
+
+.formTopLine {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.formTopLine .back {
+  margin-bottom: 0;
+}
+
+.lastNumberBox {
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 14px;
+  display: grid;
+  align-content: center;
+  text-align: right;
+}
+
+.lastNumberBox span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.lastNumberBox strong {
+  color: var(--red-dark);
+  font-size: 24px;
+  line-height: 1.1;
 }
 
 .hidden { display: none !important; }
@@ -337,6 +378,13 @@ label {
   .topbar { padding: 16px 22px; }
   .brand { font-size: 24px; }
   main { padding: 28px 18px 70px; }
+  .formTopLine {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .lastNumberBox {
+    text-align: left;
+  }
   .stats, .compactFilters, .listActions, .checks, .actions, .photoGrid, .voiceActions {
     grid-template-columns: 1fr;
   }

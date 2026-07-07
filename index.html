@@ -23,6 +23,8 @@
         <p class="subtitle">Importa Excel, añade solo registros nuevos, corrige datos, guarda fotos y descarga todo junto.</p>
 
         <div class="card">
+          <button id="clearRecordsBtn" class="danger dangerTop">Eliminar todos los registros</button>
+
           <div class="stats">
             <div><strong id="totalCount">0</strong><span>Total</span></div>
             <div><strong id="seenCount">0</strong><span>Vistos</span></div>
@@ -35,7 +37,6 @@
           <p id="importStatus" class="importStatus"></p>
           <button id="newRecordBtn" class="secondary">Meter dato nuevo</button>
           <button id="downloadExcelBtn" class="secondary">Descargar Excel</button>
-          <button id="clearRecordsBtn" class="danger">Eliminar todos los registros</button>
         </div>
       </section>
 
@@ -96,7 +97,13 @@
       </section>
 
       <section id="formView" class="hidden">
-        <button class="back" data-back="list">← Volver</button>
+        <div class="formTopLine">
+          <button class="back" data-back="list">← Volver</button>
+          <div class="lastNumberBox">
+            <span>Último número</span>
+            <strong id="lastNumberUsed">-</strong>
+          </div>
+        </div>
         <p class="kicker" id="formKicker">REGISTRO</p>
         <h2 id="formTitle">Editar extintor</h2>
 
