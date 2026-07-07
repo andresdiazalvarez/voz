@@ -1,6 +1,7 @@
 const DB_NAME = "voz-db-v1";
 const DB_VERSION = 1;
 const STORE_NAME = "state";
+const LAST_NUMBER_KEY = "voz-last-number-used";
 
 const defectOptions = [
   "Extintor caducado.",
@@ -259,8 +260,9 @@ function setPhotoPreview(index, dataUrl) {
 }
 
 function updateLastNumberUsed(currentId = "") {
+  const savedNumber = localStorage.getItem(LAST_NUMBER_KEY);
   const lastRecord = records.find((record) => record.id !== currentId && safeText(record.cantidad).trim());
-  const value = lastRecord ? safeText(lastRecord.cantidad).trim() : "-";
+  const value = safeText(savedNumber).trim() || safeText(lastRecord?.cantidad).trim() || "-";
   $("lastNumberUsed").textContent = value;
 }
 
@@ -713,6 +715,7 @@ async function saveForm(event) {
   const index = records.findIndex((item) => item.id === record.id);
   if (index >= 0) records[index] = record;
   else records.unshift(record);
+  if (record.cantidad) localStorage.setItem(LAST_NUMBER_KEY, record.cantidad);
   await saveRecords();
   if (isNewRecord) openForm();
   else showView("list");
@@ -734,6 +737,7 @@ async function clearAllRecords() {
   }
   if (!confirm("¿Seguro que quieres eliminar todos los registros guardados en este dispositivo?")) return;
   records = [];
+  localStorage.removeItem(LAST_NUMBER_KEY);
   await saveRecords();
   renderTable();
   showView("home");
