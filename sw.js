@@ -1,4 +1,4 @@
-const CACHE_NAME = "voz-v9-ultimo-numero-visible";
+const CACHE_NAME = "voz-v10-importacion-cabeceras";
 const ASSETS = [
   "./",
   "./index.html",

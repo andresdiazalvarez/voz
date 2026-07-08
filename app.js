@@ -94,19 +94,42 @@ function excelCellToText(value) {
   return String(value);
 }
 
-function rowToImportedRecord(rowValues, index) {
-  const values = [];
-  for (let col = 1; col <= 10; col += 1) values[col] = excelCellToText(rowValues[col]);
+function normalizeHeader(value) {
+  return safeText(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[º°]/g, "o")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function buildHeaderMap(rowValues) {
+  const map = {};
+  for (let col = 1; col < rowValues.length; col += 1) {
+    const key = normalizeHeader(excelCellToText(rowValues[col]));
+    if (key) map[key] = col;
+  }
+  return map;
+}
+
+function importedValue(rowValues, headerMap, keys, fallbackCol) {
+  const col = keys.map((key) => headerMap[key]).find(Boolean) || fallbackCol;
+  return excelCellToText(rowValues[col]);
+}
+
+function rowToImportedRecord(rowValues, index, headerMap = {}) {
   return cleanRecord({
     id: `import-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
-    cliente: "",
-    cantidad: values[2],
-    edificio: values[3],
-    ubicacion: values[4],
-    modelo: values[6],
-    numeroSerie: values[7],
-    fechaFabricacion: values[9],
-    fechaProximoRetimbrado: values[10],
+    cliente: importedValue(rowValues, headerMap, ["cliente"], 1),
+    edificio: importedValue(rowValues, headerMap, ["edificio"], 2),
+    cantidad: importedValue(rowValues, headerMap, ["numerosyco", "numero", "num"], 3),
+    ubicacion: importedValue(rowValues, headerMap, ["ubicacion"], 4),
+    modelo: importedValue(rowValues, headerMap, ["modelo"], 5),
+    numeroSerie: importedValue(rowValues, headerMap, ["noserie", "numeroserie", "serie"], 6),
+    fechaFabricacion: importedValue(rowValues, headerMap, ["fechaanofabricacion", "fechafabricacion", "fabricacion"], 7),
+    fechaProximoRetimbrado: importedValue(rowValues, headerMap, ["fecharetimbrado", "retimbrado"], 8),
+    observaciones: importedValue(rowValues, headerMap, ["observaciones", "observacion"], 9),
+    senal: importedValue(rowValues, headerMap, ["senal"], 10),
     origen: "importado",
   });
 }
@@ -751,9 +774,10 @@ async function importExcelFile(file) {
   const sheet = workbook.worksheets[0];
   if (!sheet) return alert("No encuentro ninguna hoja en ese Excel.");
   const imported = [];
+  const headerMap = buildHeaderMap(sheet.getRow(1).values);
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
-    const record = rowToImportedRecord(row.values, rowNumber);
+    const record = rowToImportedRecord(row.values, rowNumber, headerMap);
     const hasData = [record.edificio, record.cantidad, record.ubicacion, record.modelo, record.numeroSerie].some((value) => safeText(value).trim());
     if (!hasData) return;
     imported.push(record);
