@@ -2,7 +2,7 @@ const DB_NAME = "correctivos-db-v1";
 const DB_VERSION = 1;
 const STORE_NAME = "state";
 const LAST_NUMBER_KEY = "correctivos-last-number-used";
-const rowColorOptions = ["", "#fff3bf", "#d3f9d8", "#d0ebff", "#ffe3f2", "#e5dbff", "#ffd8a8"];
+const cellColorOptions = ["", "#fff3bf", "#d3f9d8", "#d0ebff", "#ffe3f2", "#e5dbff", "#ffd8a8"];
 
 const defectOptions = [
   "Extintor caducado.",
@@ -68,7 +68,11 @@ function cleanRecord(record = {}) {
     defectos: normalizeDefects(record.defectos),
     photos: Array.isArray(record.photos) ? [safeText(record.photos[0]), safeText(record.photos[1])] : ["", ""],
     visto: Boolean(record.visto),
-    rowColor: safeText(record.rowColor),
+    cellColors: {
+      edificio: safeText(record.cellColors?.edificio),
+      ubicacion: safeText(record.cellColors?.ubicacion),
+      modelo: safeText(record.cellColors?.modelo),
+    },
     origen: record.origen || "excel",
   };
 }
@@ -238,13 +242,12 @@ function renderTable() {
     const photo2 = record.photos[1] ? `<img class="tablePhoto" src="${record.photos[1]}" alt="Foto 2">` : `<span class="noPhoto">—</span>`;
     const tr = document.createElement("tr");
     tr.dataset.recordId = record.id;
-    if (record.rowColor) tr.style.backgroundColor = record.rowColor;
     tr.innerHTML = `
-      <td data-field-edit="edificio">${safeText(record.edificio) || "-"}</td>
+      <td data-field-edit="edificio" style="${cellColorStyle(record, "edificio")}">${safeText(record.edificio) || "-"}</td>
       <td><span class="${record.visto ? "ok" : "pending"}">${record.visto ? "Sí" : "No"}</span></td>
       <td><strong>${safeText(record.cantidad) || "-"}</strong></td>
-      <td data-field-edit="ubicacion">${safeText(record.ubicacion) || "-"}</td>
-      <td data-field-edit="modelo">${safeText(record.modelo) || "-"}</td>
+      <td data-field-edit="ubicacion" style="${cellColorStyle(record, "ubicacion")}">${safeText(record.ubicacion) || "-"}</td>
+      <td data-field-edit="modelo" style="${cellColorStyle(record, "modelo")}">${safeText(record.modelo) || "-"}</td>
       <td>${safeText(record.numeroSerie) || "-"}</td>
       <td>${safeText(record.fechaFabricacion) || "-"}</td>
       <td>${safeText(record.fechaProximoRetimbrado) || "-"}</td>
@@ -264,6 +267,11 @@ function renderTable() {
   body.querySelectorAll("[data-field-edit]").forEach((cell) => bindEditableTableCell(cell));
 }
 
+function cellColorStyle(record, field) {
+  const color = safeText(record.cellColors?.[field]);
+  return color ? `background-color:${color}` : "";
+}
+
 function bindEditableTableCell(cell) {
   let clickTimer = null;
   cell.addEventListener("click", () => {
@@ -281,7 +289,7 @@ function bindEditableTableCell(cell) {
       clearTimeout(clickTimer);
       clickTimer = null;
     }
-    openColorPicker(cell.closest("tr")?.dataset.recordId, event);
+    openColorPicker(cell.closest("tr")?.dataset.recordId, cell.dataset.fieldEdit, event);
   });
 }
 
@@ -289,14 +297,14 @@ function closeColorPicker() {
   document.querySelector(".colorPicker")?.remove();
 }
 
-function openColorPicker(recordId, event) {
-  if (!recordId) return;
+function openColorPicker(recordId, field, event) {
+  if (!recordId || !field) return;
   closeColorPicker();
   const picker = document.createElement("div");
   picker.className = "colorPicker";
   picker.style.left = `${Math.min(event.clientX, window.innerWidth - 260)}px`;
   picker.style.top = `${Math.min(event.clientY + 8, window.innerHeight - 90)}px`;
-  picker.innerHTML = rowColorOptions
+  picker.innerHTML = cellColorOptions
     .map((color) => {
       const label = color ? `Color ${color}` : "Sin color";
       const style = color ? `background:${color}` : "";
@@ -308,7 +316,7 @@ function openColorPicker(recordId, event) {
     button.addEventListener("click", async () => {
       const record = records.find((item) => item.id === recordId);
       if (!record) return;
-      record.rowColor = button.dataset.color;
+      record.cellColors = { ...(record.cellColors || {}), [field]: button.dataset.color };
       await saveRecords();
       closeColorPicker();
       renderTable();
@@ -787,7 +795,7 @@ function collectForm() {
   record.defectos = Array.from($("defectsList").querySelectorAll("input:checked")).map((input) => input.value);
   record.photos = [currentPhotos[0] || "", currentPhotos[1] || ""];
   record.visto = $("visto").checked;
-  record.rowColor = existingRecord?.rowColor || "";
+  record.cellColors = existingRecord?.cellColors || {};
   return cleanRecord(record);
 }
 

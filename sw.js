@@ -1,4 +1,4 @@
-const CACHE_NAME = "correctivos-v2-colores-listado";
+const CACHE_NAME = "correctivos-v3-colores-por-celda";
 const ASSETS = [
   "./",
   "./index.html",
