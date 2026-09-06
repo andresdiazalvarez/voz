@@ -1,11 +1,11 @@
 :root {
-  --red: #b45cff;
-  --red-dark: #a238f5;
-  --paper: #f5f3ff;
+  --red: #ff4fb8;
+  --red-dark: #ec1f93;
+  --paper: #fff0f8;
   --card: #ffffff;
-  --ink: #21162f;
-  --muted: #6d6380;
-  --line: #ddd6fe;
+  --ink: #2f1324;
+  --muted: #7b6574;
+  --line: #ffd0ea;
 }
 
 * { box-sizing: border-box; }
@@ -85,7 +85,7 @@ h3 { margin: 0 0 14px; font-size: 22px; }
 }
 
 .stats div {
-  background: #f1edff;
+  background: #ffe3f2;
   border-radius: 18px;
   padding: 16px;
 }
@@ -238,9 +238,13 @@ th, td {
   vertical-align: top;
 }
 
+td[data-field-edit] {
+  cursor: text;
+}
+
 th {
-  background: #f1edff;
-  color: #4c3b69;
+  background: #ffe3f2;
+  color: #6b234c;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -268,12 +272,40 @@ th {
 
 .noPhoto { color: var(--muted); font-weight: 700; }
 
+.colorPicker {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 10px 28px rgba(47, 19, 36, .18);
+}
+
+.colorSwatch {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cfcac3;
+  border-radius: 50%;
+  padding: 0;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.colorSwatch.noColor {
+  background: linear-gradient(135deg, #fff 0 46%, #d9480f 47% 53%, #fff 54% 100%);
+  font-size: 22px;
+}
+
 .formCard { display: grid; gap: 16px; }
 
 .voiceBlock {
   display: grid;
   gap: 14px;
-  background: #f1edff;
+  background: #ffe3f2;
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
@@ -299,7 +331,7 @@ th {
 
 .voiceListening {
   border-color: var(--red-dark);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, .22);
+  box-shadow: 0 0 0 3px rgba(255, 79, 184, .22);
 }
 
 label {
@@ -320,7 +352,7 @@ label {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #f1edff;
+  background: #ffe3f2;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
@@ -350,8 +382,8 @@ label {
   place-items: center;
   border: 2px dashed #cfc7bf;
   border-radius: 20px;
-  background: #f1edff;
-  color: #6d6380;
+  background: #ffe3f2;
+  color: #7b6574;
   cursor: pointer;
   overflow: hidden;
   padding: 0;

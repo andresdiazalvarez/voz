@@ -1,4 +1,4 @@
-const CACHE_NAME = "voz-v10-importacion-cabeceras";
+const CACHE_NAME = "correctivos-v2-colores-listado";
 const ASSETS = [
   "./",
   "./index.html",

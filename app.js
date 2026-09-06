@@ -1,7 +1,8 @@
-const DB_NAME = "voz-db-v1";
+const DB_NAME = "correctivos-db-v1";
 const DB_VERSION = 1;
 const STORE_NAME = "state";
-const LAST_NUMBER_KEY = "voz-last-number-used";
+const LAST_NUMBER_KEY = "correctivos-last-number-used";
+const rowColorOptions = ["", "#fff3bf", "#d3f9d8", "#d0ebff", "#ffe3f2", "#e5dbff", "#ffd8a8"];
 
 const defectOptions = [
   "Extintor caducado.",
@@ -67,6 +68,7 @@ function cleanRecord(record = {}) {
     defectos: normalizeDefects(record.defectos),
     photos: Array.isArray(record.photos) ? [safeText(record.photos[0]), safeText(record.photos[1])] : ["", ""],
     visto: Boolean(record.visto),
+    rowColor: safeText(record.rowColor),
     origen: record.origen || "excel",
   };
 }
@@ -235,12 +237,14 @@ function renderTable() {
     const photo1 = record.photos[0] ? `<img class="tablePhoto" src="${record.photos[0]}" alt="Foto 1">` : `<span class="noPhoto">—</span>`;
     const photo2 = record.photos[1] ? `<img class="tablePhoto" src="${record.photos[1]}" alt="Foto 2">` : `<span class="noPhoto">—</span>`;
     const tr = document.createElement("tr");
+    tr.dataset.recordId = record.id;
+    if (record.rowColor) tr.style.backgroundColor = record.rowColor;
     tr.innerHTML = `
-      <td>${safeText(record.cliente) || "-"}</td>
-      <td>${safeText(record.edificio) || "-"}</td>
+      <td data-field-edit="edificio">${safeText(record.edificio) || "-"}</td>
+      <td><span class="${record.visto ? "ok" : "pending"}">${record.visto ? "Sí" : "No"}</span></td>
       <td><strong>${safeText(record.cantidad) || "-"}</strong></td>
-      <td>${safeText(record.ubicacion) || "-"}</td>
-      <td>${safeText(record.modelo) || "-"}</td>
+      <td data-field-edit="ubicacion">${safeText(record.ubicacion) || "-"}</td>
+      <td data-field-edit="modelo">${safeText(record.modelo) || "-"}</td>
       <td>${safeText(record.numeroSerie) || "-"}</td>
       <td>${safeText(record.fechaFabricacion) || "-"}</td>
       <td>${safeText(record.fechaProximoRetimbrado) || "-"}</td>
@@ -249,7 +253,7 @@ function renderTable() {
       <td>${defects}</td>
       <td>${photo1}</td>
       <td>${photo2}</td>
-      <td><span class="${record.visto ? "ok" : "pending"}">${record.visto ? "Sí" : "No"}</span></td>
+      <td>${safeText(record.cliente) || "-"}</td>
       <td><button class="editBtn" data-edit="${record.id}">Ver / corregir</button></td>
     `;
     body.appendChild(tr);
@@ -257,6 +261,60 @@ function renderTable() {
   body.querySelectorAll("[data-edit]").forEach((button) => {
     button.addEventListener("click", () => openForm(button.dataset.edit));
   });
+  body.querySelectorAll("[data-field-edit]").forEach((cell) => bindEditableTableCell(cell));
+}
+
+function bindEditableTableCell(cell) {
+  let clickTimer = null;
+  cell.addEventListener("click", () => {
+    if (clickTimer) return;
+    clickTimer = setTimeout(() => {
+      const row = cell.closest("tr");
+      openForm(row?.dataset.recordId);
+      setTimeout(() => $(cell.dataset.fieldEdit)?.focus(), 120);
+      clickTimer = null;
+    }, 260);
+  });
+  cell.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    openColorPicker(cell.closest("tr")?.dataset.recordId, event);
+  });
+}
+
+function closeColorPicker() {
+  document.querySelector(".colorPicker")?.remove();
+}
+
+function openColorPicker(recordId, event) {
+  if (!recordId) return;
+  closeColorPicker();
+  const picker = document.createElement("div");
+  picker.className = "colorPicker";
+  picker.style.left = `${Math.min(event.clientX, window.innerWidth - 260)}px`;
+  picker.style.top = `${Math.min(event.clientY + 8, window.innerHeight - 90)}px`;
+  picker.innerHTML = rowColorOptions
+    .map((color) => {
+      const label = color ? `Color ${color}` : "Sin color";
+      const style = color ? `background:${color}` : "";
+      return `<button type="button" class="colorSwatch ${color ? "" : "noColor"}" style="${style}" data-color="${color}" aria-label="${label}">${color ? "" : "×"}</button>`;
+    })
+    .join("");
+  document.body.appendChild(picker);
+  picker.querySelectorAll("[data-color]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const record = records.find((item) => item.id === recordId);
+      if (!record) return;
+      record.rowColor = button.dataset.color;
+      await saveRecords();
+      closeColorPicker();
+      renderTable();
+    });
+  });
+  setTimeout(() => document.addEventListener("click", closeColorPicker, { once: true }), 0);
 }
 
 function renderDefects(selected = []) {
@@ -724,10 +782,12 @@ function openForm(id = null) {
 
 function collectForm() {
   const record = { id: $("recordId").value || createId(), origen: $("recordId").value ? "editado" : "manual" };
+  const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
   record.defectos = Array.from($("defectsList").querySelectorAll("input:checked")).map((input) => input.value);
   record.photos = [currentPhotos[0] || "", currentPhotos[1] || ""];
   record.visto = $("visto").checked;
+  record.rowColor = existingRecord?.rowColor || "";
   return cleanRecord(record);
 }
 
@@ -799,7 +859,7 @@ function defectFlag(selected, defect) {
 async function downloadExcel() {
   if (!window.ExcelJS) return alert("No se ha cargado el generador de Excel.");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Voz";
+  workbook.creator = "Correctivos";
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Extintores");
   const columns = [
@@ -877,7 +937,7 @@ async function downloadExcel() {
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `Voz_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `Correctivos_${new Date().toISOString().slice(0, 10)}.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
