@@ -244,7 +244,7 @@ function renderTable() {
     tr.dataset.recordId = record.id;
     tr.innerHTML = `
       <td data-field-edit="edificio" style="${cellColorStyle(record, "edificio")}">${safeText(record.edificio) || "-"}</td>
-      <td><span class="${record.visto ? "ok" : "pending"}">${record.visto ? "Sí" : "No"}</span></td>
+      <td class="seenCell ${record.visto ? "seenYes" : "seenNo"}" data-toggle-seen="${record.id}">${record.visto ? "Sí" : "No"}</td>
       <td><strong>${safeText(record.cantidad) || "-"}</strong></td>
       <td data-field-edit="ubicacion" style="${cellColorStyle(record, "ubicacion")}">${safeText(record.ubicacion) || "-"}</td>
       <td data-field-edit="modelo" style="${cellColorStyle(record, "modelo")}">${safeText(record.modelo) || "-"}</td>
@@ -264,7 +264,18 @@ function renderTable() {
   body.querySelectorAll("[data-edit]").forEach((button) => {
     button.addEventListener("click", () => openForm(button.dataset.edit));
   });
+  body.querySelectorAll("[data-toggle-seen]").forEach((cell) => {
+    cell.addEventListener("click", () => toggleSeenFromTable(cell.dataset.toggleSeen));
+  });
   body.querySelectorAll("[data-field-edit]").forEach((cell) => bindEditableTableCell(cell));
+}
+
+async function toggleSeenFromTable(recordId) {
+  const record = records.find((item) => item.id === recordId);
+  if (!record) return;
+  record.visto = !record.visto;
+  await saveRecords();
+  renderTable();
 }
 
 function cellColorStyle(record, field) {

@@ -242,6 +242,21 @@ td[data-field-edit] {
   cursor: text;
 }
 
+.seenCell {
+  cursor: pointer;
+  text-align: center;
+  font-weight: 950;
+  color: #101018;
+}
+
+.seenYes {
+  background: #00b7ff;
+}
+
+.seenNo {
+  background: #ffe600;
+}
+
 th {
   background: #ffe3f2;
   color: #6b234c;
