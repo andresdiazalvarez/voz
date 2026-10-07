@@ -20,9 +20,6 @@ const fields = ["edificio", "ubicacion", "cantidad", "numeroSerie", "fechaFabric
 
 let records = [];
 let currentPhotos = ["", ""];
-let voiceRecognition = null;
-let voiceStep = "numero";
-let voiceActive = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -187,7 +184,6 @@ function updateStats() {
 }
 
 function showView(name) {
-  if (name !== "form") stopVoiceInput(false);
   $("homeView").classList.toggle("hidden", name !== "home");
   $("listView").classList.toggle("hidden", name !== "list");
   $("formView").classList.toggle("hidden", name !== "form");
@@ -241,6 +237,21 @@ function renderTable() {
         row.append(seen);
       }
     }
+    for (let index = 0; index < 2; index += 1) {
+      const cell = document.createElement("td");
+      const photo = record.photos?.[index];
+      if (photo) {
+        const image = document.createElement("img");
+        image.className = "tablePhoto";
+        image.src = photo;
+        image.alt = `Foto ${index + 1}`;
+        cell.append(image);
+      } else {
+        cell.className = "noPhoto";
+        cell.textContent = "-";
+      }
+      row.append(cell);
+    }
     const action = document.createElement("td");
     const button = document.createElement("button");
     button.className = "editBtn";
@@ -250,7 +261,7 @@ function renderTable() {
     row.append(action);
     body.append(row);
   }
-  if (!body.children.length) body.innerHTML = '<tr><td colspan="8">No hay registros con ese filtro.</td></tr>';
+  if (!body.children.length) body.innerHTML = '<tr><td colspan="10">No hay registros con ese filtro.</td></tr>';
 }
 
 async function toggleSeenFromTable(recordId) {
@@ -565,97 +576,6 @@ function setSelectValue(id, value) {
   select.value = "";
 }
 
-function setVoiceStatus(message) {
-  const status = $("voiceStatus");
-  if (status) status.textContent = message;
-}
-
-function appendSerial(value) {
-  const serial = speechToSerial(value);
-  if (!serial) return;
-  $("numeroSerie").value = `${$("numeroSerie").value}${serial}`.trim();
-}
-
-function captureAfterKeyword(text, keyword) {
-  const normalized = normalizeSpeechText(text);
-  const index = normalized.indexOf(keyword);
-  if (index < 0) return "";
-  return normalized.slice(index + keyword.length).trim();
-}
-
-function handleVoiceText(text) {
-  const commands = { edificio: "edificio", ubicacion: "ubicacion", defectos: "cantidad", recordar: "numeroSerie", informacion: "fechaFabricacion", observaciones: "observaciones" };
-  const pattern = /\b(edificio|ubicaci[oó]n|defectos|recordar|informaci[oó]n|observaciones)\b/gi;
-  let offset = 0;
-  const append = (value) => {
-    if (!fields.includes(voiceStep) || !value.trim()) return;
-    const input = $(voiceStep);
-    input.value = [input.value.trim(), value.trim().replace(/^[,.:;\s]+/, "")].filter(Boolean).join(" ");
-  };
-  for (const match of text.matchAll(pattern)) {
-    append(text.slice(offset, match.index));
-    voiceStep = commands[normalizeSpeechText(match[0])];
-    offset = match.index + match[0].length;
-  }
-  append(text.slice(offset));
-  setVoiceStatus("Escuchando.");
-}
-
-function getSpeechRecognition() {
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
-}
-
-function startVoiceInput() {
-  const SpeechRecognition = getSpeechRecognition();
-  if (!SpeechRecognition) {
-    setVoiceStatus("Este navegador no permite reconocimiento de voz. Prueba con Chrome o Edge.");
-    return;
-  }
-
-  if (voiceRecognition) voiceRecognition.stop();
-  voiceStep = "numero";
-  voiceActive = true;
-  voiceRecognition = new SpeechRecognition();
-  voiceRecognition.lang = "es-ES";
-  voiceRecognition.continuous = true;
-  voiceRecognition.interimResults = false;
-  voiceRecognition.onresult = (event) => {
-    for (let index = event.resultIndex; index < event.results.length; index += 1) {
-      if (event.results[index].isFinal) handleVoiceText(event.results[index][0].transcript);
-    }
-  };
-  voiceRecognition.onerror = () => setVoiceStatus("No he podido escuchar bien. Puedes parar e iniciar voz de nuevo.");
-  voiceRecognition.onend = () => {
-    if (voiceActive && voiceStep !== "completo") {
-      try {
-        voiceRecognition.start();
-      } catch {}
-      return;
-    }
-    $("voiceStartBtn").disabled = false;
-    $("voiceStopBtn").disabled = true;
-    $("recordForm").classList.remove("voiceListening");
-  };
-  $("voiceStartBtn").disabled = true;
-  $("voiceStopBtn").disabled = false;
-  $("recordForm").classList.add("voiceListening");
-  setVoiceStatus('Escuchando.');
-  voiceRecognition.start();
-}
-
-function stopVoiceInput(showMessage = true) {
-  voiceActive = false;
-  if (voiceRecognition) {
-    try {
-      voiceRecognition.stop();
-    } catch {}
-  }
-  $("voiceStartBtn").disabled = false;
-  $("voiceStopBtn").disabled = true;
-  $("recordForm").classList.remove("voiceListening");
-  if (showMessage) setVoiceStatus("Voz parada. Puedes revisar o completar los campos manualmente.");
-}
-
 function resizePhoto(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -679,7 +599,6 @@ function resizePhoto(file) {
 }
 
 function openForm(id = null) {
-  stopVoiceInput();
   const record = id ? records.find((item) => item.id === id) : null;
   $("recordId").value = record?.id || "";
 
@@ -688,6 +607,8 @@ function openForm(id = null) {
   $("deleteBtn").classList.toggle("hidden", !record);
   for (const key of fields) $(key).value = safeText(record?.[key]);
   $("visto").checked = Boolean(record?.visto);
+  setPhotoPreview(0, record?.photos?.[0] || "");
+  setPhotoPreview(1, record?.photos?.[1] || "");
   showView("form");
 }
 
@@ -696,6 +617,7 @@ function collectForm() {
   const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
   record.visto = $("visto").checked;
+  record.photos = [...currentPhotos];
   record.cellColors = existingRecord?.cellColors || {};
   return cleanRecord(record);
 }
@@ -770,14 +692,23 @@ async function downloadExcel() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "VOZ";
   const sheet = workbook.addWorksheet("VOZ");
-  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"]];
+  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"], ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
   sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" ? 12 : 40 }));
-  for (const record of records) sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), visto: record.visto ? "Sí" : "No" });
+  for (const record of records) {
+    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), visto: record.visto ? "Sí" : "No" });
+    for (let index = 0; index < 2; index += 1) {
+      const photo = record.photos?.[index];
+      if (!photo) continue;
+      const imageId = workbook.addImage({ base64: photo, extension: "jpeg" });
+      sheet.addImage(imageId, { tl: { col: 7 + index, row: row.number - 1 }, ext: { width: 120, height: 85 }, editAs: "oneCell" });
+      row.height = 92;
+    }
+  }
   sheet.getRow(1).font = { bold: true };
-  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4FB8" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCC99" } };
   sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = "A1:G1";
+  sheet.autoFilter = "A1:I1";
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -794,8 +725,6 @@ function bindEvents() {
   $("downloadExcelFromTableBtn").addEventListener("click", downloadExcel);
   $("clearRecordsBtn").addEventListener("click", clearAllRecords);
   $("viewTableFromFormBtn").addEventListener("click", () => showView("list"));
-  $("voiceStartBtn").addEventListener("click", startVoiceInput);
-  $("voiceStopBtn").addEventListener("click", () => stopVoiceInput());
   $("importExcelBtn").addEventListener("click", () => $("importExcelInput").click());
   $("importExcelInput").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
@@ -818,6 +747,20 @@ function bindEvents() {
   });
   $("recordForm").addEventListener("submit", saveForm);
   $("deleteBtn").addEventListener("click", deleteCurrent);
+  [0, 1].forEach((index) => {
+    $(`photoInput${index + 1}`).addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        setPhotoPreview(index, await resizePhoto(file));
+      } catch {
+        alert("No he podido cargar esa foto. Prueba con otra imagen.");
+      } finally {
+        event.target.value = "";
+      }
+    });
+    $(`deletePhoto${index + 1}`).addEventListener("click", () => setPhotoPreview(index, ""));
+  });
   document.querySelectorAll("[data-back]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.back)));
 }
 

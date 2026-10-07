@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#ff4fb8" />
+    <meta name="theme-color" content="#913106" />
     <title>VOZ</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
@@ -74,6 +74,8 @@
                 <th>Recordar</th>
                 <th>Información</th>
                 <th>Observaciones</th>
+                <th>Foto 1</th>
+                <th>Foto 2</th>
                 <th></th>
               </tr>
             </thead>
@@ -92,17 +94,6 @@
         <form id="recordForm" class="card formCard">
           <input type="hidden" id="recordId" />
 
-          <div class="voiceBlock">
-            <div>
-              <h3>Entrada por voz</h3>
-              <p id="voiceStatus">Voz parada.</p>
-            </div>
-            <div class="voiceActions">
-              <button type="button" id="voiceStartBtn" class="secondary">Iniciar voz</button>
-              <button type="button" id="voiceStopBtn" class="secondary" disabled>Parar voz</button>
-            </div>
-          </div>
-
           <label>Edificio<input id="edificio" /></label>
           <label>Ubicación<textarea id="ubicacion" rows="2"></textarea></label>
           <label>Defectos<textarea id="cantidad" rows="3"></textarea></label>
@@ -110,6 +101,30 @@
           <label>Información<textarea id="fechaFabricacion" rows="3"></textarea></label>
           <label>Observaciones<textarea id="observaciones" rows="3"></textarea></label>
           <label class="seenLine"><input id="visto" type="checkbox" /><span>Marcar como visto</span></label>
+
+          <div class="photosBlock">
+            <h3>Fotografías</h3>
+            <div class="photoGrid">
+              <div class="photoSlot">
+                <strong>Foto 1</strong>
+                <label class="photoBox" id="photoBox1">
+                  <input id="photoInput1" type="file" accept="image/*" capture="environment" />
+                  <span>+ Hacer foto</span>
+                  <img id="photoPreview1" alt="Foto 1" class="hidden" />
+                </label>
+                <button type="button" id="deletePhoto1" class="photoDelete">Eliminar foto</button>
+              </div>
+              <div class="photoSlot">
+                <strong>Foto 2</strong>
+                <label class="photoBox" id="photoBox2">
+                  <input id="photoInput2" type="file" accept="image/*" capture="environment" />
+                  <span>+ Hacer foto</span>
+                  <img id="photoPreview2" alt="Foto 2" class="hidden" />
+                </label>
+                <button type="button" id="deletePhoto2" class="photoDelete">Eliminar foto</button>
+              </div>
+            </div>
+          </div>
 
           <div class="actions">
             <button type="button" id="viewTableFromFormBtn" class="secondary">▦ Ver registros en tabla</button>
