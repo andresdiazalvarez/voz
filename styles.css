@@ -181,7 +181,7 @@ button {
 
 .compactFilters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
   gap: 10px;
   margin: 6px 0 14px;
 }
@@ -228,7 +228,7 @@ textarea { resize: vertical; }
 table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 1480px;
+  min-width: 680px;
 }
 
 th, td {
@@ -265,6 +265,7 @@ th {
   letter-spacing: .04em;
 }
 
+td { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 280px; }
 .ok { color: #16703a; }
 .pending { color: #a15a00; }
 

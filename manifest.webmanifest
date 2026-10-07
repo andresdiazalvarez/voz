@@ -1,6 +1,6 @@
 {
-  "name": "Correctivos",
-  "short_name": "Correctivos",
+  "name": "VOZ",
+  "short_name": "VOZ",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#fff0f8",

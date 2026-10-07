@@ -16,18 +16,7 @@ const defectOptions = [
   "Extintor en mal estado.",
 ];
 
-const fields = [
-  "cliente",
-  "edificio",
-  "cantidad",
-  "ubicacion",
-  "modelo",
-  "numeroSerie",
-  "fechaFabricacion",
-  "fechaProximoRetimbrado",
-  "observaciones",
-  "senal",
-];
+const fields = ["cantidad", "numeroSerie", "fechaFabricacion", "observaciones"];
 
 let records = [];
 let currentPhotos = ["", ""];
@@ -119,7 +108,8 @@ function buildHeaderMap(rowValues) {
 }
 
 function importedValue(rowValues, headerMap, keys, fallbackCol) {
-  const col = keys.map((key) => headerMap[key]).find(Boolean) || fallbackCol;
+  const col = keys.map((key) => headerMap[key]).find(Boolean);
+  if (!col) return "";
   return excelCellToText(rowValues[col]);
 }
 
@@ -128,11 +118,11 @@ function rowToImportedRecord(rowValues, index, headerMap = {}) {
     id: `import-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
     cliente: importedValue(rowValues, headerMap, ["cliente"], 1),
     edificio: importedValue(rowValues, headerMap, ["edificio"], 2),
-    cantidad: importedValue(rowValues, headerMap, ["numerosyco", "numero", "num"], 3),
+    cantidad: importedValue(rowValues, headerMap, ["defectos", "numerosyco", "numero", "num"], 3),
     ubicacion: importedValue(rowValues, headerMap, ["ubicacion"], 4),
     modelo: importedValue(rowValues, headerMap, ["modelo"], 5),
-    numeroSerie: importedValue(rowValues, headerMap, ["noserie", "numeroserie", "serie"], 6),
-    fechaFabricacion: importedValue(rowValues, headerMap, ["fechaanofabricacion", "fechafabricacion", "fabricacion"], 7),
+    numeroSerie: importedValue(rowValues, headerMap, ["recordar", "noserie", "numeroserie", "serie"], 6),
+    fechaFabricacion: importedValue(rowValues, headerMap, ["informacion", "fechaanofabricacion", "fechafabricacion", "fabricacion"], 7),
     fechaProximoRetimbrado: importedValue(rowValues, headerMap, ["fecharetimbrado", "retimbrado"], 8),
     observaciones: importedValue(rowValues, headerMap, ["observaciones", "observacion"], 9),
     senal: importedValue(rowValues, headerMap, ["senal"], 10),
@@ -191,11 +181,10 @@ function updateStats() {
   const total = records.length;
   const seen = records.filter((record) => record.visto).length;
   $("totalCount").textContent = total;
-  $("seenCount").textContent = seen;
-  $("pendingCount").textContent = total - seen;
 }
 
 function showView(name) {
+  if (name !== "form") stopVoiceInput(false);
   $("homeView").classList.toggle("hidden", name !== "home");
   $("listView").classList.toggle("hidden", name !== "list");
   $("formView").classList.toggle("hidden", name !== "form");
@@ -208,66 +197,34 @@ function compareText(a, b) {
 }
 
 function filteredRecords() {
-  const filterEdificio = $("filterEdificio").value.trim().toLowerCase();
-  const filterNumero = $("filterNumero").value.trim().toLowerCase();
-  const filterSerie = $("filterSerie").value.trim().toLowerCase();
-  const seenFilter = $("seenFilter").value;
-  const sortOrder = $("sortOrder").value;
-
-  const rows = records.filter((record) => {
-    if (seenFilter === "seen" && !record.visto) return false;
-    if (seenFilter === "pending" && record.visto) return false;
-    if (filterEdificio && ![record.edificio, record.ubicacion].join(" ").toLowerCase().includes(filterEdificio)) return false;
-    if (filterNumero && !safeText(record.cantidad).toLowerCase().includes(filterNumero)) return false;
-    if (filterSerie && !safeText(record.numeroSerie).toLowerCase().includes(filterSerie)) return false;
-    return true;
-  });
-
-  if (sortOrder === "edificio") rows.sort((a, b) => compareText(a.edificio, b.edificio) || compareText(a.cantidad, b.cantidad));
-  if (sortOrder === "numero") rows.sort((a, b) => compareText(a.cantidad, b.cantidad) || compareText(a.edificio, b.edificio));
+  const number = $("filterNumero").value.trim().toLowerCase();
+  const serial = $("filterSerie").value.trim().toLowerCase();
+  const rows = records.filter((record) => safeText(record.cantidad).toLowerCase().includes(number) && safeText(record.numeroSerie).toLowerCase().includes(serial));
+  if ($("sortOrder").value === "numero") rows.sort((a, b) => compareText(a.cantidad, b.cantidad));
   return rows;
 }
 
 function renderTable() {
   const body = $("recordsBody");
-  const rows = filteredRecords();
-  body.innerHTML = "";
-  if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="15">No hay registros con ese filtro.</td></tr>`;
-    return;
+  body.replaceChildren();
+  for (const record of filteredRecords()) {
+    const row = document.createElement("tr");
+    for (const field of fields) {
+      const cell = document.createElement("td");
+      cell.textContent = safeText(record[field]) || "-";
+      cell.onclick = () => { openForm(record.id); $(field).focus(); };
+      row.append(cell);
+    }
+    const action = document.createElement("td");
+    const button = document.createElement("button");
+    button.className = "editBtn";
+    button.textContent = "Ver / corregir";
+    button.onclick = () => openForm(record.id);
+    action.append(button);
+    row.append(action);
+    body.append(row);
   }
-  for (const record of rows) {
-    const defects = record.defectos.length ? record.defectos.join(" / ") : "-";
-    const photo1 = record.photos[0] ? `<img class="tablePhoto" src="${record.photos[0]}" alt="Foto 1">` : `<span class="noPhoto">—</span>`;
-    const photo2 = record.photos[1] ? `<img class="tablePhoto" src="${record.photos[1]}" alt="Foto 2">` : `<span class="noPhoto">—</span>`;
-    const tr = document.createElement("tr");
-    tr.dataset.recordId = record.id;
-    tr.innerHTML = `
-      <td data-field-edit="edificio" style="${cellColorStyle(record, "edificio")}">${safeText(record.edificio) || "-"}</td>
-      <td class="seenCell ${record.visto ? "seenYes" : "seenNo"}" data-toggle-seen="${record.id}">${record.visto ? "Sí" : "No"}</td>
-      <td><strong>${safeText(record.cantidad) || "-"}</strong></td>
-      <td data-field-edit="ubicacion" style="${cellColorStyle(record, "ubicacion")}">${safeText(record.ubicacion) || "-"}</td>
-      <td data-field-edit="modelo" style="${cellColorStyle(record, "modelo")}">${safeText(record.modelo) || "-"}</td>
-      <td>${safeText(record.numeroSerie) || "-"}</td>
-      <td>${safeText(record.fechaFabricacion) || "-"}</td>
-      <td>${safeText(record.fechaProximoRetimbrado) || "-"}</td>
-      <td>${safeText(record.observaciones) || "-"}</td>
-      <td>${safeText(record.senal) || "-"}</td>
-      <td>${defects}</td>
-      <td>${photo1}</td>
-      <td>${photo2}</td>
-      <td>${safeText(record.cliente) || "-"}</td>
-      <td><button class="editBtn" data-edit="${record.id}">Ver / corregir</button></td>
-    `;
-    body.appendChild(tr);
-  }
-  body.querySelectorAll("[data-edit]").forEach((button) => {
-    button.addEventListener("click", () => openForm(button.dataset.edit));
-  });
-  body.querySelectorAll("[data-toggle-seen]").forEach((cell) => {
-    cell.addEventListener("click", () => toggleSeenFromTable(cell.dataset.toggleSeen));
-  });
-  body.querySelectorAll("[data-field-edit]").forEach((cell) => bindEditableTableCell(cell));
+  if (!body.children.length) body.innerHTML = '<tr><td colspan="5">No hay registros con ese filtro.</td></tr>';
 }
 
 async function toggleSeenFromTable(recordId) {
@@ -601,109 +558,21 @@ function captureAfterKeyword(text, keyword) {
 }
 
 function handleVoiceText(text) {
-  const normalized = normalizeSpeechText(text);
-  if (!normalized) return;
-
-  if (voiceStep === "numero") {
-    const numberValue = captureAfterKeyword(text, "numero");
-    if (!numberValue && !normalized.includes("numero")) {
-      setVoiceStatus('Di "numero" y despues el numero del extintor.');
-      return;
-    }
-    if (numberValue) $("cantidad").value = speechToNumberValue(numberValue);
-    voiceStep = "modelo";
-    setVoiceStatus('Numero anotado. Ahora di "modelo" y el modelo del extintor.');
-    return;
+  const commands = { defectos: "cantidad", recordar: "numeroSerie", informacion: "fechaFabricacion", observaciones: "observaciones" };
+  const pattern = /\b(defectos|recordar|informaci[oó]n|observaciones)\b/gi;
+  let offset = 0;
+  const append = (value) => {
+    if (!fields.includes(voiceStep) || !value.trim()) return;
+    const input = $(voiceStep);
+    input.value = [input.value.trim(), value.trim().replace(/^[,.:;\s]+/, "")].filter(Boolean).join(" ");
+  };
+  for (const match of text.matchAll(pattern)) {
+    append(text.slice(offset, match.index));
+    voiceStep = commands[normalizeSpeechText(match[0])];
+    offset = match.index + match[0].length;
   }
-
-  if (voiceStep === "modelo") {
-    const modelValue = captureAfterKeyword(text, "modelo");
-    if (!modelValue && !normalized.includes("modelo")) {
-      setVoiceStatus('Di "modelo" y el modelo del extintor.');
-      return;
-    }
-    if (modelValue) {
-      $("modelo").value = speechToModel(modelValue);
-      voiceStep = "serie";
-      setVoiceStatus('Modelo anotado. Ahora di "serie" y dicta el numero de serie, numero a numero.');
-    } else {
-      voiceStep = "modeloValor";
-      setVoiceStatus("Ahora di el modelo del extintor.");
-    }
-    return;
-  }
-
-  if (voiceStep === "modeloValor") {
-    $("modelo").value = speechToModel(text);
-    voiceStep = "serie";
-    setVoiceStatus('Modelo anotado. Ahora di "serie" y dicta el numero de serie, numero a numero.');
-    return;
-  }
-
-  if (voiceStep === "serie") {
-    const serieValue = captureAfterKeyword(text, "serie");
-    if (!serieValue && !normalized.includes("serie")) {
-      setVoiceStatus('Di "serie" y despues el numero de serie.');
-      return;
-    }
-    if (serieValue) {
-      appendSerial(serieValue);
-      voiceStep = "numeroSerie";
-      setVoiceStatus('Numero de serie anotado. Cuando termines di "fabricacion" y la fecha.');
-    } else {
-      voiceStep = "numeroSerie";
-      setVoiceStatus("Ahora dicta el numero de serie, numero a numero.");
-    }
-    return;
-  }
-
-  if (voiceStep === "numeroSerie") {
-    const fabricationIndex = normalized.indexOf("fabricacion");
-    if (fabricationIndex >= 0) {
-      const before = normalized.slice(0, fabricationIndex).trim();
-      const after = normalized.slice(fabricationIndex + "fabricacion".length).trim();
-      if (before) appendSerial(before);
-      if (after) setSelectValue("fechaFabricacion", speechToYear(after));
-      voiceStep = after ? "retimbrado" : "fabricacionValor";
-      setVoiceStatus(after ? 'Fabricacion anotada. Ahora di "retimbrado" y la fecha.' : "Ahora di la fecha de fabricacion.");
-      return;
-    }
-    appendSerial(text);
-    setVoiceStatus('Numero de serie anotado. Cuando termines di "fabricacion" y la fecha.');
-    return;
-  }
-
-  if (voiceStep === "fabricacionValor") {
-    setSelectValue("fechaFabricacion", speechToYear(text));
-    voiceStep = "retimbrado";
-    setVoiceStatus('Fabricacion anotada. Ahora di "retimbrado" y la fecha.');
-    return;
-  }
-
-  if (voiceStep === "retimbrado") {
-    const retimbradoValue = captureAfterKeyword(text, "retimbrado");
-    if (!retimbradoValue && !normalized.includes("retimbrado")) {
-      setVoiceStatus('Di "retimbrado" y la fecha de retimbrado.');
-      return;
-    }
-    if (!retimbradoValue) {
-      voiceStep = "retimbradoValor";
-      setVoiceStatus("Ahora di la fecha de retimbrado.");
-      return;
-    }
-    setSelectValue("fechaProximoRetimbrado", speechToYear(retimbradoValue));
-    voiceStep = "completo";
-    stopVoiceInput(false);
-    setVoiceStatus("Datos de voz anotados. Revisa o completa manualmente y pulsa Guardar.");
-    return;
-  }
-
-  if (voiceStep === "retimbradoValor") {
-    setSelectValue("fechaProximoRetimbrado", speechToYear(text));
-    voiceStep = "completo";
-    stopVoiceInput(false);
-    setVoiceStatus("Datos de voz anotados. Revisa o completa manualmente y pulsa Guardar.");
-  }
+  append(text.slice(offset));
+  setVoiceStatus("Escuchando.");
 }
 
 function getSpeechRecognition() {
@@ -744,7 +613,7 @@ function startVoiceInput() {
   $("voiceStartBtn").disabled = true;
   $("voiceStopBtn").disabled = false;
   $("recordForm").classList.add("voiceListening");
-  setVoiceStatus('Escuchando. Empieza diciendo "numero" y el dato.');
+  setVoiceStatus('Escuchando.');
   voiceRecognition.start();
 }
 
@@ -784,28 +653,21 @@ function resizePhoto(file) {
 }
 
 function openForm(id = null) {
+  stopVoiceInput();
   const record = id ? records.find((item) => item.id === id) : null;
   $("recordId").value = record?.id || "";
-  updateLastNumberUsed(record?.id || "");
-  $("formTitle").textContent = record ? "Ver y corregir extintor" : "Meter dato nuevo";
+
+  $("formTitle").textContent = record ? "Ver y corregir registro" : "Meter dato nuevo";
   $("formKicker").textContent = record ? "REGISTRO EXISTENTE" : "NUEVO REGISTRO";
   $("deleteBtn").classList.toggle("hidden", !record);
   for (const key of fields) $(key).value = safeText(record?.[key]);
-  $("visto").checked = Boolean(record?.visto);
-  renderDefects(record?.defectos || []);
-  const photos = Array.isArray(record?.photos) ? record.photos : ["", ""];
-  setPhotoPreview(0, photos[0]);
-  setPhotoPreview(1, photos[1]);
   showView("form");
 }
 
 function collectForm() {
-  const record = { id: $("recordId").value || createId(), origen: $("recordId").value ? "editado" : "manual" };
+  const record = { ...records.find((item) => item.id === $("recordId").value), id: $("recordId").value || createId(), origen: $("recordId").value ? "editado" : "manual" };
   const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
-  record.defectos = Array.from($("defectsList").querySelectorAll("input:checked")).map((input) => input.value);
-  record.photos = [currentPhotos[0] || "", currentPhotos[1] || ""];
-  record.visto = $("visto").checked;
   record.cellColors = existingRecord?.cellColors || {};
   return cleanRecord(record);
 }
@@ -843,7 +705,7 @@ async function clearAllRecords() {
   await saveRecords();
   renderTable();
   showView("home");
-  alert("Registros eliminados. Ya puedes importar otro cliente.");
+  alert("Registros eliminados.");
 }
 
 async function importExcelFile(file) {
@@ -857,7 +719,7 @@ async function importExcelFile(file) {
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const record = rowToImportedRecord(row.values, rowNumber, headerMap);
-    const hasData = [record.edificio, record.cantidad, record.ubicacion, record.modelo, record.numeroSerie].some((value) => safeText(value).trim());
+    const hasData = fields.map((field) => record[field]).some((value) => safeText(value).trim());
     if (!hasData) return;
     imported.push(record);
   });
@@ -878,87 +740,22 @@ function defectFlag(selected, defect) {
 async function downloadExcel() {
   if (!window.ExcelJS) return alert("No se ha cargado el generador de Excel.");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Correctivos";
-  workbook.created = new Date();
-  const sheet = workbook.addWorksheet("Extintores");
-  const columns = [
-    ["cliente", "Cliente", 22],
-    ["edificio", "Edificio", 14],
-    ["cantidad", "Número SYCo", 18],
-    ["ubicacion", "Ubicación", 42],
-    ["modelo", "Modelo", 20],
-    ["numeroSerie", "Nº serie", 18],
-    ["fechaFabricacion", "Fecha / año fabricación", 22],
-    ["fechaProximoRetimbrado", "Fecha retimbrado", 20],
-    ["observaciones", "Observaciones", 34],
-    ["senal", "Señal", 14],
-    ["defectos", "Defectos encontrados", 42],
-    ["defectoCaducado", "Extintor caducado", 20],
-    ["defectoObstaculo", "Hay un obstáculo", 20],
-    ["defectoDescargado", "Extintor descargado", 22],
-    ["defectoSinPresion", "Extintor sin presión", 22],
-    ["defectoSuelo", "Extintor en el suelo", 22],
-    ["defectoCristal", "Cristal armario roto o sin cristal", 32],
-    ["defectoSinSenal", "Sin señal", 16],
-    ["defectoSenalCaducada", "Señal caducada", 20],
-    ["defectoMalEstado", "Extintor en mal estado", 24],
-    ["foto1", "Foto 1", 22],
-    ["foto2", "Foto 2", 22],
-    ["visto", "Visto", 10],
-  ];
-  sheet.columns = columns.map(([key, header, width]) => ({ key, header, width }));
-  sheet.getRow(1).font = { bold: true, color: { argb: "FF3A1028" } };
-  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9A8D4" } };
-  sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-  sheet.getRow(1).height = 30;
-
-  for (const record of filteredRecords()) {
-    const selected = record.defectos || [];
-    const row = sheet.addRow({
-      ...record,
-      defectos: selected.join(" / "),
-      defectoCaducado: defectFlag(selected, "Extintor caducado."),
-      defectoObstaculo: defectFlag(selected, "Hay un obstáculo."),
-      defectoDescargado: defectFlag(selected, "Extintor descargado."),
-      defectoSinPresion: defectFlag(selected, "Extintor sin presión."),
-      defectoSuelo: defectFlag(selected, "Extintor en el suelo."),
-      defectoCristal: defectFlag(selected, "Cristal armario roto o sin cristal."),
-      defectoSinSenal: defectFlag(selected, "Sin señal."),
-      defectoSenalCaducada: defectFlag(selected, "Señal caducada."),
-      defectoMalEstado: defectFlag(selected, "Extintor en mal estado."),
-      foto1: record.photos[0] ? "Foto 1" : "",
-      foto2: record.photos[1] ? "Foto 2" : "",
-      visto: record.visto ? "Sí" : "No",
-    });
-    if (record.photos[0] || record.photos[1]) row.height = 92;
-    [0, 1].forEach((photoIndex) => {
-      const photo = record.photos[photoIndex];
-      if (!photo) return;
-      const imageId = workbook.addImage({ base64: photo, extension: "jpeg" });
-      const col = photoIndex === 0 ? 20 : 21;
-      sheet.addImage(imageId, { tl: { col, row: row.number - 1 }, ext: { width: 120, height: 85 }, editAs: "oneCell" });
-    });
-  }
+  workbook.creator = "VOZ";
+  const sheet = workbook.addWorksheet("VOZ");
+  const labels = ["Defectos", "Recordar", "Información", "Observaciones"];
+  sheet.columns = fields.map((key, index) => ({ key, header: labels[index], width: 40 }));
+  for (const record of records) sheet.addRow(Object.fromEntries(fields.map((key) => [key, safeText(record[key])])));
+  sheet.getRow(1).font = { bold: true };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4FB8" } };
+  sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
-  sheet.eachRow((row, rowNumber) => {
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFE6E0DA" } },
-        left: { style: "thin", color: { argb: "FFE6E0DA" } },
-        bottom: { style: "thin", color: { argb: "FFE6E0DA" } },
-        right: { style: "thin", color: { argb: "FFE6E0DA" } },
-      };
-      cell.alignment = { vertical: "top", wrapText: true };
-      if (rowNumber > 1 && rowNumber % 2 === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFAF8F5" } };
-    });
-  });
+  sheet.autoFilter = "A1:D1";
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `Correctivos_${new Date().toISOString().slice(0, 10)}.xlsx`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "VOZ_" + new Date().toISOString().slice(0, 10) + ".xlsx";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 function bindEvents() {
@@ -987,26 +784,12 @@ function bindEvents() {
       event.target.value = "";
     }
   });
-  ["filterEdificio", "filterNumero", "filterSerie", "sortOrder", "seenFilter"].forEach((id) => {
+  ["filterNumero", "filterSerie", "sortOrder"].forEach((id) => {
     $(id).addEventListener("input", renderTable);
     $(id).addEventListener("change", renderTable);
   });
   $("recordForm").addEventListener("submit", saveForm);
   $("deleteBtn").addEventListener("click", deleteCurrent);
-  [0, 1].forEach((index) => {
-    $(`photoInput${index + 1}`).addEventListener("change", async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      try {
-        setPhotoPreview(index, await resizePhoto(file));
-      } catch {
-        alert("No he podido cargar esa foto. Prueba con otra imagen.");
-      } finally {
-        event.target.value = "";
-      }
-    });
-    $(`deletePhoto${index + 1}`).addEventListener("click", () => setPhotoPreview(index, ""));
-  });
   document.querySelectorAll("[data-back]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.back)));
 }
 

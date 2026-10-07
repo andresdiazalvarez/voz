@@ -1,4 +1,4 @@
-# Correctivos
+# Voz
 
 Aplicación nueva y limpia para controlar extintores.
 
