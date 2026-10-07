@@ -16,7 +16,7 @@ const defectOptions = [
   "Extintor en mal estado.",
 ];
 
-const fields = ["cantidad", "numeroSerie", "fechaFabricacion", "observaciones"];
+const fields = ["edificio", "ubicacion", "cantidad", "numeroSerie", "fechaFabricacion", "observaciones"];
 
 let records = [];
 let currentPhotos = ["", ""];
@@ -126,6 +126,7 @@ function rowToImportedRecord(rowValues, index, headerMap = {}) {
     fechaProximoRetimbrado: importedValue(rowValues, headerMap, ["fecharetimbrado", "retimbrado"], 8),
     observaciones: importedValue(rowValues, headerMap, ["observaciones", "observacion"], 9),
     senal: importedValue(rowValues, headerMap, ["senal"], 10),
+    visto: ["si", "true", "1"].includes(normalizeSpeechText(importedValue(rowValues, headerMap, ["visto"], 0))),
     origen: "importado",
   });
 }
@@ -181,6 +182,8 @@ function updateStats() {
   const total = records.length;
   const seen = records.filter((record) => record.visto).length;
   $("totalCount").textContent = total;
+  $("seenCount").textContent = seen;
+  $("pendingCount").textContent = total - seen;
 }
 
 function showView(name) {
@@ -199,7 +202,12 @@ function compareText(a, b) {
 function filteredRecords() {
   const number = $("filterNumero").value.trim().toLowerCase();
   const serial = $("filterSerie").value.trim().toLowerCase();
-  const rows = records.filter((record) => safeText(record.cantidad).toLowerCase().includes(number) && safeText(record.numeroSerie).toLowerCase().includes(serial));
+  const building = $("filterEdificio").value.trim().toLowerCase();
+  const state = $("seenFilter").value;
+  const rows = records.filter((record) => safeText(record.cantidad).toLowerCase().includes(number) && safeText(record.numeroSerie).toLowerCase().includes(serial)
+    && [record.edificio, record.ubicacion].join(" ").toLowerCase().includes(building)
+    && (state === "all" || (state === "seen" ? record.visto : !record.visto)));
+  if ($("sortOrder").value === "edificio") rows.sort((a, b) => compareText(a.edificio, b.edificio));
   if ($("sortOrder").value === "numero") rows.sort((a, b) => compareText(a.cantidad, b.cantidad));
   return rows;
 }
@@ -209,11 +217,29 @@ function renderTable() {
   body.replaceChildren();
   for (const record of filteredRecords()) {
     const row = document.createElement("tr");
+    row.dataset.recordId = record.id;
     for (const field of fields) {
       const cell = document.createElement("td");
       cell.textContent = safeText(record[field]) || "-";
-      cell.onclick = () => { openForm(record.id); $(field).focus(); };
+      if (["edificio", "ubicacion"].includes(field)) {
+        cell.dataset.fieldEdit = field;
+        cell.style.backgroundColor = record.cellColors?.[field] || "";
+        bindEditableTableCell(cell);
+      } else {
+        cell.onclick = () => { openForm(record.id); $(field).focus(); };
+      }
       row.append(cell);
+      if (field === "edificio") {
+        const seen = document.createElement("td");
+        seen.className = `seenCell ${record.visto ? "seenYes" : "seenNo"}`;
+        seen.textContent = record.visto ? "Sí" : "No";
+        seen.tabIndex = 0;
+        seen.setAttribute("role", "button");
+        seen.setAttribute("aria-label", record.visto ? "Marcar como no visto" : "Marcar como visto");
+        seen.onclick = () => toggleSeenFromTable(record.id);
+        seen.onkeydown = (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); seen.click(); } };
+        row.append(seen);
+      }
     }
     const action = document.createElement("td");
     const button = document.createElement("button");
@@ -224,7 +250,7 @@ function renderTable() {
     row.append(action);
     body.append(row);
   }
-  if (!body.children.length) body.innerHTML = '<tr><td colspan="5">No hay registros con ese filtro.</td></tr>';
+  if (!body.children.length) body.innerHTML = '<tr><td colspan="8">No hay registros con ese filtro.</td></tr>';
 }
 
 async function toggleSeenFromTable(recordId) {
@@ -558,8 +584,8 @@ function captureAfterKeyword(text, keyword) {
 }
 
 function handleVoiceText(text) {
-  const commands = { defectos: "cantidad", recordar: "numeroSerie", informacion: "fechaFabricacion", observaciones: "observaciones" };
-  const pattern = /\b(defectos|recordar|informaci[oó]n|observaciones)\b/gi;
+  const commands = { edificio: "edificio", ubicacion: "ubicacion", defectos: "cantidad", recordar: "numeroSerie", informacion: "fechaFabricacion", observaciones: "observaciones" };
+  const pattern = /\b(edificio|ubicaci[oó]n|defectos|recordar|informaci[oó]n|observaciones)\b/gi;
   let offset = 0;
   const append = (value) => {
     if (!fields.includes(voiceStep) || !value.trim()) return;
@@ -661,6 +687,7 @@ function openForm(id = null) {
   $("formKicker").textContent = record ? "REGISTRO EXISTENTE" : "NUEVO REGISTRO";
   $("deleteBtn").classList.toggle("hidden", !record);
   for (const key of fields) $(key).value = safeText(record?.[key]);
+  $("visto").checked = Boolean(record?.visto);
   showView("form");
 }
 
@@ -668,6 +695,7 @@ function collectForm() {
   const record = { ...records.find((item) => item.id === $("recordId").value), id: $("recordId").value || createId(), origen: $("recordId").value ? "editado" : "manual" };
   const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
+  record.visto = $("visto").checked;
   record.cellColors = existingRecord?.cellColors || {};
   return cleanRecord(record);
 }
@@ -742,14 +770,14 @@ async function downloadExcel() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "VOZ";
   const sheet = workbook.addWorksheet("VOZ");
-  const labels = ["Defectos", "Recordar", "Información", "Observaciones"];
-  sheet.columns = fields.map((key, index) => ({ key, header: labels[index], width: 40 }));
-  for (const record of records) sheet.addRow(Object.fromEntries(fields.map((key) => [key, safeText(record[key])])));
+  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"]];
+  sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" ? 12 : 40 }));
+  for (const record of records) sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), visto: record.visto ? "Sí" : "No" });
   sheet.getRow(1).font = { bold: true };
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF4FB8" } };
   sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = "A1:D1";
+  sheet.autoFilter = "A1:G1";
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -784,7 +812,7 @@ function bindEvents() {
       event.target.value = "";
     }
   });
-  ["filterNumero", "filterSerie", "sortOrder"].forEach((id) => {
+  ["filterEdificio", "filterNumero", "filterSerie", "sortOrder", "seenFilter"].forEach((id) => {
     $(id).addEventListener("input", renderTable);
     $(id).addEventListener("change", renderTable);
   });

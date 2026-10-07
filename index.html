@@ -26,6 +26,8 @@
 
           <div class="stats">
             <div><strong id="totalCount">0</strong><span>Total</span></div>
+            <div><strong id="seenCount">0</strong><span>Vistos</span></div>
+            <div><strong id="pendingCount">0</strong><span>Pendientes</span></div>
           </div>
 
           <button id="openListBtn" class="primary">▦ Ver registros en tabla</button>
@@ -43,14 +45,17 @@
         <h2>Listado</h2>
 
         <div class="compactFilters">
+          <label>Edificio<input id="filterEdificio" type="search" placeholder="Filtrar edificio o ubicación" /></label>
           <label>Defectos<input id="filterNumero" type="search" placeholder="Filtrar defectos" /></label>
           <label>Recordar<input id="filterSerie" type="search" placeholder="Filtrar recordar" /></label>
           <label>Ordenar
             <select id="sortOrder">
               <option value="none">Sin ordenar</option>
+              <option value="edificio">Edificio</option>
               <option value="numero">Defectos</option>
             </select>
           </label>
+          <label>Estado<select id="seenFilter"><option value="all">Todos</option><option value="pending">Pendientes</option><option value="seen">Vistos</option></select></label>
         </div>
 
         <div class="listActions">
@@ -62,6 +67,9 @@
           <table>
             <thead>
               <tr>
+                <th>Edificio</th>
+                <th>Visto</th>
+                <th>Ubicación</th>
                 <th>Defectos</th>
                 <th>Recordar</th>
                 <th>Información</th>
@@ -95,10 +103,13 @@
             </div>
           </div>
 
+          <label>Edificio<input id="edificio" /></label>
+          <label>Ubicación<textarea id="ubicacion" rows="2"></textarea></label>
           <label>Defectos<textarea id="cantidad" rows="3"></textarea></label>
           <label>Recordar<textarea id="numeroSerie" rows="3"></textarea></label>
           <label>Información<textarea id="fechaFabricacion" rows="3"></textarea></label>
           <label>Observaciones<textarea id="observaciones" rows="3"></textarea></label>
+          <label class="seenLine"><input id="visto" type="checkbox" /><span>Marcar como visto</span></label>
 
           <div class="actions">
             <button type="button" id="viewTableFromFormBtn" class="secondary">▦ Ver registros en tabla</button>
