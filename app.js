@@ -690,8 +690,8 @@ function defectFlag(selected, defect) {
 async function downloadExcel() {
   if (!window.ExcelJS) return alert("No se ha cargado el generador de Excel.");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "VOZ";
-  const sheet = workbook.addWorksheet("VOZ");
+  workbook.creator = "Edificios";
+  const sheet = workbook.addWorksheet("Edificios");
   const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"], ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
   sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" ? 12 : 40 }));
   for (const record of records) {
@@ -712,7 +712,7 @@ async function downloadExcel() {
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "VOZ_" + new Date().toISOString().slice(0, 10) + ".xlsx";
+  link.download = "Edificios_" + new Date().toISOString().slice(0, 10) + ".xlsx";
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }

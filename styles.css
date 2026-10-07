@@ -1,7 +1,7 @@
 :root {
-  --red: #b84308;
-  --red-dark: #8f3005;
-  --paper: #9a3507;
+  --red: #c34e0a;
+  --red-dark: #a63d08;
+  --paper: #d66016;
   --card: #ffffff;
   --ink: #291b14;
   --muted: #705547;
@@ -15,12 +15,12 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   min-height: 100vh;
-  background: linear-gradient(135deg, #702506 0%, #a63d09 50%, #cf5b12 100%);
+  background: linear-gradient(135deg, #ac410b 0%, #d66016 50%, #f58b32 100%);
 }
 
 .topbar {
-  background: linear-gradient(110deg, #813007, #b8490c);
-  border-top: 12px solid #702506;
+  background: linear-gradient(110deg, #b7460a, #df6a1b);
+  border-top: 12px solid #ac410b;
   color: #fff;
   border-bottom: 1px solid var(--line);
   padding: 18px 28px;
@@ -445,8 +445,8 @@ main > section > h2,
 main > section > .kicker,
 .compactFilters > label { color: #fff; }
 main > section > .kicker { color: #ffe1c8; }
-.primary, .editBtn { background: linear-gradient(110deg, #913106, #bd480b); }
-.primary:hover, .editBtn:hover { background: #8f3005; }
+.primary, .editBtn { background: linear-gradient(110deg, #b7460a, #c5520c); }
+.primary:hover, .editBtn:hover { background: #a63d08; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
   outline: 3px solid #ffb264;
   outline-offset: 2px;

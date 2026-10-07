@@ -3,8 +3,8 @@
   "short_name": "Edificios",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#9a3507",
-  "theme_color": "#913106",
+  "background_color": "#d66016",
+  "theme_color": "#bf4b09",
   "icons": [
     {
       "src": "icon.svg",
