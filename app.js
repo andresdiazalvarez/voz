@@ -20,18 +20,46 @@ const fields = ["edificio", "ubicacion", "cantidad", "numeroSerie", "fechaFabric
 const statusFields = ["det", "cex", "rxt", "gru", "red", "mon"];
 
 function statusValue(value) {
+  if (normalizeHeader(value) === "ok") return "ok";
   return value === true || ["si", "true", "1"].includes(normalizeHeader(value));
 }
 
+function statusLabel(value) {
+  return value === "ok" ? "OK" : value ? "Sí" : "No";
+}
+
 function setStatusButton(button, value, label) {
-  button.className = `statusButton ${value ? "statusYes" : "statusNo"}`;
-  button.textContent = value ? "Sí" : "No";
-  button.setAttribute("aria-pressed", String(value));
-  button.setAttribute("aria-label", `${label}: ${value ? "Sí" : "No"}`);
+  value = statusValue(value);
+  button.className = `statusButton ${value === "ok" ? "statusOk" : value ? "statusYes" : "statusNo"}`;
+  button.textContent = statusLabel(value);
+  button.dataset.status = String(value);
+  button.setAttribute("aria-pressed", value === "ok" ? "mixed" : String(value));
+  button.setAttribute("aria-label", `${label}: ${statusLabel(value)}`);
+}
+
+function bindStatusButton(button, readValue, writeValue) {
+  let clickTimer;
+  const commit = (value) => {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+    return writeValue(value);
+  };
+  button.onclick = (event) => {
+    if (event.detail === 0) return commit(readValue() !== true);
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => commit(readValue() !== true), 350);
+  };
+  button.ondblclick = (event) => {
+    event.preventDefault();
+    return commit("ok");
+  };
 }
 
 let records = [];
 let currentPhotos = ["", ""];
+let clients = [];
+let activeClientId = null;
+let importing = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -151,42 +179,133 @@ function openDatabase() {
   });
 }
 
-async function readState() {
+async function readState(key = "records") {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");
-    const request = tx.objectStore(STORE_NAME).get("records");
+    const request = tx.objectStore(STORE_NAME).get(key);
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
 }
 
-async function writeState(value) {
+async function writeState(value, key = "clients-v1") {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(value, "records");
+    tx.objectStore(STORE_NAME).put(value, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("No se han guardado los datos."));
   });
 }
 
 async function loadRecords() {
-  try {
-    const saved = await readState();
-    if (Array.isArray(saved)) {
-      records = saved.map(cleanRecord);
-      return;
-    }
-  } catch {}
-  records = (window.INITIAL_EXTINTORES_LISTADOS || []).map(cleanRecord);
-  await saveRecords();
+  const savedClients = await readState("clients-v1");
+  if (Array.isArray(savedClients)) {
+    clients = savedClients.map((client) => ({ ...client, records: (client.records || []).map(cleanRecord) }));
+    return;
+  }
+  // Keep the legacy record key intact while creating the client-based storage.
+  const saved = await readState();
+  const previous = (Array.isArray(saved) ? saved : window.INITIAL_EXTINTORES_LISTADOS || []).map(cleanRecord);
+  const groups = new Map();
+  for (const record of previous) {
+    const name = record.cliente.trim() || "Registros anteriores";
+    if (!groups.has(name)) groups.set(name, { id: createId(), name, data1: "", data2: "", records: [] });
+    groups.get(name).records.push(record);
+  }
+  clients = [...groups.values()];
+  await writeState(clients);
 }
 
 async function saveRecords() {
+  const client = clients.find((item) => item.id === activeClientId);
+  if (!client) throw new Error("Selecciona un cliente.");
   records = records.map(cleanRecord);
+  client.records = records;
+  await writeState(clients);
   updateStats();
-  await writeState(records);
+}
+
+function openClient(id) {
+  if (importing) return;
+  const client = clients.find((item) => item.id === id);
+  if (!client) return;
+  activeClientId = id;
+  records = client.records;
+  $("clientHeading").textContent = client.name;
+  for (const field of ["filterEdificio", "filterNumero", "filterSerie"]) $(field).value = "";
+  $("sortOrder").value = "none";
+  $("seenFilter").value = "all";
+  $("importStatus").textContent = "";
+  updateStats();
+  showView("home");
+}
+
+function renderClients() {
+  const list = $("clientsList");
+  list.replaceChildren();
+  for (const client of clients) {
+    const form = document.createElement("form");
+    form.className = "clientCard";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "clientOpen";
+    open.textContent = client.name;
+    open.onclick = () => openClient(client.id);
+    form.append(open);
+    const count = document.createElement("p");
+    count.textContent = `${client.records.length} registros`;
+    form.append(count);
+    const inputs = {};
+    for (const [key, title] of [["name", "Nombre del cliente"], ["data1", "Datos 1"], ["data2", "Datos 2"]]) {
+      const label = document.createElement("label");
+      label.textContent = title;
+      const input = document.createElement(key === "name" ? "input" : "textarea");
+      input.value = client[key] || "";
+      if (key === "name") { input.required = true; input.maxLength = 150; } else input.rows = 2;
+      inputs[key] = input;
+      label.append(input);
+      form.append(label);
+    }
+    const save = document.createElement("button");
+    save.type = "submit";
+    save.className = "secondary";
+    save.textContent = "Guardar datos del cliente";
+    form.append(save);
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const name = inputs.name.value.trim();
+      if (!name) return inputs.name.focus();
+      const previous = { name: client.name, data1: client.data1, data2: client.data2 };
+      save.disabled = true;
+      Object.assign(client, { name, data1: inputs.data1.value.trim(), data2: inputs.data2.value.trim() });
+      try { await writeState(clients); open.textContent = name; save.textContent = "Datos guardados"; }
+      catch { Object.assign(client, previous); alert("No se han podido guardar los datos del cliente."); }
+      finally { save.disabled = false; }
+    };
+    list.append(form);
+  }
+}
+
+async function createClient(event) {
+  event.preventDefault();
+  const name = $("newClientName").value.trim();
+  if (!name) return $("newClientName").focus();
+  const button = event.target.querySelector('button[type="submit"]');
+  button.disabled = true;
+  const client = { id: createId(), name, data1: $("newClientData1").value.trim(), data2: $("newClientData2").value.trim(), records: [] };
+  clients.push(client);
+  try {
+    await writeState(clients);
+    event.target.reset();
+    renderClients();
+    openClient(client.id);
+  } catch {
+    clients = clients.filter((item) => item.id !== client.id);
+    alert("No se ha podido crear el cliente.");
+  } finally { button.disabled = false; }
 }
 
 function updateStats() {
@@ -198,10 +317,17 @@ function updateStats() {
 }
 
 function showView(name) {
+  if (importing && name === "clients") return;
+  $("clientsView").classList.toggle("hidden", name !== "clients");
   $("homeView").classList.toggle("hidden", name !== "home");
   $("listView").classList.toggle("hidden", name !== "list");
   $("formView").classList.toggle("hidden", name !== "form");
   if (name === "list") renderTable();
+  if (name === "clients") {
+    renderClients();
+    activeClientId = null;
+    records = [];
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -256,10 +382,10 @@ function renderTable() {
       const toggle = document.createElement("button");
       toggle.type = "button";
       setStatusButton(toggle, record[key], key.toUpperCase());
-      toggle.onclick = async () => {
+      bindStatusButton(toggle, () => record[key], async (value) => {
         toggle.disabled = true;
         const previous = record[key];
-        record[key] = !previous;
+        record[key] = value;
         try {
           await saveRecords();
           renderTable();
@@ -268,7 +394,7 @@ function renderTable() {
           toggle.disabled = false;
           alert("No se ha podido guardar el cambio.");
         }
-      };
+      });
       cell.append(toggle);
       row.append(cell);
     }
@@ -642,7 +768,7 @@ function openForm(id = null) {
   $("deleteBtn").classList.toggle("hidden", !record);
   for (const key of fields) $(key).value = safeText(record?.[key]);
   $("visto").checked = Boolean(record?.visto);
-  for (const key of statusFields) setStatusButton($(key), Boolean(record?.[key]), key.toUpperCase());
+  for (const key of statusFields) setStatusButton($(key), record?.[key], key.toUpperCase());
   setPhotoPreview(0, record?.photos?.[0] || "");
   setPhotoPreview(1, record?.photos?.[1] || "");
   showView("form");
@@ -653,7 +779,7 @@ function collectForm() {
   const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
   record.visto = $("visto").checked;
-  for (const key of statusFields) record[key] = $(key).getAttribute("aria-pressed") === "true";
+  for (const key of statusFields) record[key] = statusValue($(key).dataset.status);
   record.photos = [...currentPhotos];
   record.cellColors = existingRecord?.cellColors || {};
   return cleanRecord(record);
@@ -686,7 +812,7 @@ async function clearAllRecords() {
     alert("No hay registros para eliminar.");
     return;
   }
-  if (!confirm("¿Seguro que quieres eliminar todos los registros guardados en este dispositivo?")) return;
+  if (!confirm("¿Seguro que quieres eliminar todos los registros de este cliente?")) return;
   records = [];
   localStorage.removeItem(LAST_NUMBER_KEY);
   await saveRecords();
@@ -732,7 +858,7 @@ async function downloadExcel() {
   const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
   sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" || statusFields.includes(key) ? 12 : 40 }));
   for (const record of records) {
-    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, record[key] ? "Sí" : "No"])), visto: record.visto ? "Sí" : "No" });
+    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, statusLabel(record[key])])), visto: record.visto ? "Sí" : "No" });
     for (let index = 0; index < 2; index += 1) {
       const photo = record.photos?.[index];
       if (!photo) continue;
@@ -746,16 +872,27 @@ async function downloadExcel() {
   sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
   sheet.autoFilter = "A1:O1";
+  const client = clients.find((item) => item.id === activeClientId);
+  if (client) {
+    const details = workbook.addWorksheet("Cliente");
+    details.columns = [{ header: "Campo", key: "field", width: 22 }, { header: "Datos", key: "value", width: 60 }];
+    details.addRow({ field: "Cliente", value: client.name });
+    details.addRow({ field: "Datos 1", value: client.data1 });
+    details.addRow({ field: "Datos 2", value: client.data2 });
+    details.eachRow((row) => { row.alignment = { wrapText: true, vertical: "top" }; });
+  }
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "Edificios_" + new Date().toISOString().slice(0, 10) + ".xlsx";
+  const clientName = clients.find((item) => item.id === activeClientId)?.name || "Edificios";
+  link.download = clientName.replace(/[<>:"/\\|?*]/g, "_") + "_" + new Date().toISOString().slice(0, 10) + ".xlsx";
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 function bindEvents() {
-  for (const key of statusFields) $(key).onclick = () => setStatusButton($(key), $(key).getAttribute("aria-pressed") !== "true", key.toUpperCase());
+  $("newClientForm").addEventListener("submit", createClient);
+  for (const key of statusFields) bindStatusButton($(key), () => statusValue($(key).dataset.status), (value) => setStatusButton($(key), value, key.toUpperCase()));
   $("openListBtn").addEventListener("click", () => showView("list"));
   $("newRecordBtn").addEventListener("click", () => openForm());
   $("newRecordFromListBtn").addEventListener("click", () => openForm());
@@ -767,6 +904,7 @@ function bindEvents() {
   $("importExcelInput").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    importing = true;
     try {
       $("importStatus").textContent = "Importando Excel...";
       await importExcelFile(file);
@@ -776,6 +914,7 @@ function bindEvents() {
       $("importStatus").textContent = "No se ha podido importar el Excel.";
       alert("No se ha podido importar el Excel. Revisa que tenga el mismo formato.");
     } finally {
+      importing = false;
       event.target.value = "";
     }
   });
@@ -810,6 +949,7 @@ async function init() {
   await loadRecords();
   bindEvents();
   updateStats();
+  showView("clients");
 }
 
-init();
+init().catch(() => alert("No se han podido cargar los clientes guardados. Recarga la aplicación."));

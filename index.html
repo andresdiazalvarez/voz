@@ -17,12 +17,24 @@
     </header>
 
     <main>
-      <section id="homeView" class="hero">
+      <section id="clientsView">
+        <h1>Clientes</h1>
+        <div id="clientsList" class="clientsList"></div>
+        <form id="newClientForm" class="clientCard">
+          <h3>Nuevo cliente</h3>
+          <label>Nombre del cliente<input id="newClientName" required maxlength="150" /></label>
+          <label>Datos 1<textarea id="newClientData1" rows="2"></textarea></label>
+          <label>Datos 2<textarea id="newClientData2" rows="2"></textarea></label>
+          <button type="submit" class="primary">Crear cliente</button>
+        </form>
+      </section>
+      <section id="homeView" class="hero hidden">
+        <button class="back" data-back="clients">← Clientes</button>
         <p class="kicker">EDIFICIOS</p>
-        <h1>Edificios</h1>
+        <h1 id="clientHeading">Edificios</h1>
 
         <div class="card">
-          <button id="clearRecordsBtn" class="danger dangerTop">Eliminar todos los registros</button>
+          <button id="clearRecordsBtn" class="danger dangerTop">Eliminar registros de este cliente</button>
 
           <div class="stats">
             <div><strong id="totalCount">0</strong><span>Total</span></div>
