@@ -17,6 +17,18 @@ const defectOptions = [
 ];
 
 const fields = ["edificio", "ubicacion", "cantidad", "numeroSerie", "fechaFabricacion", "observaciones"];
+const statusFields = ["det", "cex", "rxt", "gru", "red", "mon"];
+
+function statusValue(value) {
+  return value === true || ["si", "true", "1"].includes(normalizeHeader(value));
+}
+
+function setStatusButton(button, value, label) {
+  button.className = `statusButton ${value ? "statusYes" : "statusNo"}`;
+  button.textContent = value ? "Sí" : "No";
+  button.setAttribute("aria-pressed", String(value));
+  button.setAttribute("aria-label", `${label}: ${value ? "Sí" : "No"}`);
+}
 
 let records = [];
 let currentPhotos = ["", ""];
@@ -41,6 +53,7 @@ function normalizeDefects(defects) {
 function cleanRecord(record = {}) {
   return {
     id: record.id || createId(),
+    ...Object.fromEntries(statusFields.map((key) => [key, statusValue(record[key])])),
     cliente: safeText(record.cliente),
     edificio: safeText(record.edificio ?? record.edificioCodigo),
     cantidad: safeText(record.cantidad),
@@ -124,6 +137,7 @@ function rowToImportedRecord(rowValues, index, headerMap = {}) {
     observaciones: importedValue(rowValues, headerMap, ["observaciones", "observacion"], 9),
     senal: importedValue(rowValues, headerMap, ["senal"], 10),
     visto: ["si", "true", "1"].includes(normalizeSpeechText(importedValue(rowValues, headerMap, ["visto"], 0))),
+    ...Object.fromEntries(statusFields.map((key) => [key, statusValue(importedValue(rowValues, headerMap, [key], 0))])),
     origen: "importado",
   });
 }
@@ -237,6 +251,27 @@ function renderTable() {
         row.append(seen);
       }
     }
+    for (const key of statusFields) {
+      const cell = document.createElement("td");
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      setStatusButton(toggle, record[key], key.toUpperCase());
+      toggle.onclick = async () => {
+        toggle.disabled = true;
+        const previous = record[key];
+        record[key] = !previous;
+        try {
+          await saveRecords();
+          renderTable();
+        } catch {
+          record[key] = previous;
+          toggle.disabled = false;
+          alert("No se ha podido guardar el cambio.");
+        }
+      };
+      cell.append(toggle);
+      row.append(cell);
+    }
     for (let index = 0; index < 2; index += 1) {
       const cell = document.createElement("td");
       const photo = record.photos?.[index];
@@ -261,7 +296,7 @@ function renderTable() {
     row.append(action);
     body.append(row);
   }
-  if (!body.children.length) body.innerHTML = '<tr><td colspan="10">No hay registros con ese filtro.</td></tr>';
+  if (!body.children.length) body.innerHTML = '<tr><td colspan="16">No hay registros con ese filtro.</td></tr>';
 }
 
 async function toggleSeenFromTable(recordId) {
@@ -607,6 +642,7 @@ function openForm(id = null) {
   $("deleteBtn").classList.toggle("hidden", !record);
   for (const key of fields) $(key).value = safeText(record?.[key]);
   $("visto").checked = Boolean(record?.visto);
+  for (const key of statusFields) setStatusButton($(key), Boolean(record?.[key]), key.toUpperCase());
   setPhotoPreview(0, record?.photos?.[0] || "");
   setPhotoPreview(1, record?.photos?.[1] || "");
   showView("form");
@@ -617,6 +653,7 @@ function collectForm() {
   const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
   record.visto = $("visto").checked;
+  for (const key of statusFields) record[key] = $(key).getAttribute("aria-pressed") === "true";
   record.photos = [...currentPhotos];
   record.cellColors = existingRecord?.cellColors || {};
   return cleanRecord(record);
@@ -669,7 +706,7 @@ async function importExcelFile(file) {
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const record = rowToImportedRecord(row.values, rowNumber, headerMap);
-    const hasData = fields.map((field) => record[field]).some((value) => safeText(value).trim());
+    const hasData = fields.map((field) => record[field]).some((value) => safeText(value).trim()) || statusFields.some((key) => record[key]);
     if (!hasData) return;
     imported.push(record);
   });
@@ -692,15 +729,15 @@ async function downloadExcel() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Edificios";
   const sheet = workbook.addWorksheet("Edificios");
-  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"], ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
-  sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" ? 12 : 40 }));
+  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
+  sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" || statusFields.includes(key) ? 12 : 40 }));
   for (const record of records) {
-    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), visto: record.visto ? "Sí" : "No" });
+    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, record[key] ? "Sí" : "No"])), visto: record.visto ? "Sí" : "No" });
     for (let index = 0; index < 2; index += 1) {
       const photo = record.photos?.[index];
       if (!photo) continue;
       const imageId = workbook.addImage({ base64: photo, extension: "jpeg" });
-      sheet.addImage(imageId, { tl: { col: 7 + index, row: row.number - 1 }, ext: { width: 120, height: 85 }, editAs: "oneCell" });
+      sheet.addImage(imageId, { tl: { col: columns.findIndex(([key]) => key === `foto${index + 1}`), row: row.number - 1 }, ext: { width: 120, height: 85 }, editAs: "oneCell" });
       row.height = 92;
     }
   }
@@ -708,7 +745,7 @@ async function downloadExcel() {
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCC99" } };
   sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = "A1:I1";
+  sheet.autoFilter = "A1:O1";
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -718,6 +755,7 @@ async function downloadExcel() {
 }
 
 function bindEvents() {
+  for (const key of statusFields) $(key).onclick = () => setStatusButton($(key), $(key).getAttribute("aria-pressed") !== "true", key.toUpperCase());
   $("openListBtn").addEventListener("click", () => showView("list"));
   $("newRecordBtn").addEventListener("click", () => openForm());
   $("newRecordFromListBtn").addEventListener("click", () => openForm());

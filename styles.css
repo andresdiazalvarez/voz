@@ -179,6 +179,13 @@ button {
   line-height: 1.1;
 }
 
+.statusGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.statusGrid > div { display: grid; gap: 8px; font-weight: 850; }
+.statusButton { min-width: 64px; height: 44px; padding: 8px 14px; border-radius: 8px; }
+.statusNo { background: #ffb3b3; color: #601414; }
+.statusYes { background: #155c32; color: #fff; }
+.statusButton:disabled { cursor: wait; }
+@media (max-width: 420px) { .statusGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .hidden { display: none !important; }
 
 .compactFilters {
