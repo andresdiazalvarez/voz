@@ -16,7 +16,7 @@ const defectOptions = [
   "Extintor en mal estado.",
 ];
 
-const fields = ["edificio", "ubicacion", "cantidad", "numeroSerie", "fechaFabricacion", "observaciones"];
+const fields = ["edificio", "ubicacion", "fechaFabricacion", "cantidad", "numeroSerie", "observaciones"];
 const statusFields = ["det", "cex", "rxt", "gru", "red", "mon"];
 
 function statusValue(value) {
@@ -398,6 +398,12 @@ function renderTable() {
       cell.append(toggle);
       row.append(cell);
     }
+    const client = clients.find((item) => item.id === activeClientId);
+    for (const key of ["name", "data1", "data2"]) {
+      const cell = document.createElement("td");
+      cell.textContent = safeText(client?.[key]) || "-";
+      row.append(cell);
+    }
     for (let index = 0; index < 2; index += 1) {
       const cell = document.createElement("td");
       const photo = record.photos?.[index];
@@ -422,7 +428,7 @@ function renderTable() {
     row.append(action);
     body.append(row);
   }
-  if (!body.children.length) body.innerHTML = '<tr><td colspan="16">No hay registros con ese filtro.</td></tr>';
+  if (!body.children.length) body.innerHTML = '<tr><td colspan="19">No hay registros con ese filtro.</td></tr>';
 }
 
 async function toggleSeenFromTable(recordId) {
@@ -829,19 +835,40 @@ async function importExcelFile(file) {
   if (!sheet) return alert("No encuentro ninguna hoja en ese Excel.");
   const imported = [];
   const headerMap = buildHeaderMap(sheet.getRow(1).values);
+  const clientDetails = {};
+  const clientColumns = [["name", "cliente"], ["data1", "datos1"], ["data2", "datos2"]];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const record = rowToImportedRecord(row.values, rowNumber, headerMap);
     const hasData = fields.map((field) => record[field]).some((value) => safeText(value).trim()) || statusFields.some((key) => record[key]);
     if (!hasData) return;
+    for (const [key, header] of clientColumns) {
+      if (!headerMap[header]) continue;
+      const value = excelCellToText(row.getCell(headerMap[header]).value).trim();
+      if (clientDetails[key] !== undefined && clientDetails[key] !== value) throw new Error("El Excel contiene datos de varios clientes. Importa un listado por cliente.");
+      clientDetails[key] = value;
+    }
     imported.push(record);
   });
   if (!imported.length) {
     $("importStatus").textContent = "No se encontraron registros para importar.";
     return alert("No se encontraron registros para importar.");
   }
+  const client = clients.find((item) => item.id === activeClientId);
+  if (!client) throw new Error("Selecciona un cliente.");
+  const detailsSheet = workbook.getWorksheet("Cliente");
+  if (detailsSheet) detailsSheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const entry = clientColumns.find(([, header]) => header === normalizeHeader(excelCellToText(row.getCell(1).value)));
+    if (entry && clientDetails[entry[0]] === undefined) clientDetails[entry[0]] = excelCellToText(row.getCell(2).value).trim();
+  });
+  const previous = { name: client.name, data1: client.data1, data2: client.data2, records };
+  if (clientDetails.name) client.name = clientDetails.name;
+  for (const key of ["data1", "data2"]) if (clientDetails[key] !== undefined) client[key] = clientDetails[key];
   records = [...imported, ...records];
-  await saveRecords();
+  try { await saveRecords(); }
+  catch (error) { Object.assign(client, previous); records = previous.records; throw error; }
+  $("clientHeading").textContent = client.name;
   $("importStatus").textContent = `Importados ${imported.length} registros. No se han descartado repetidos.`;
   alert(`Importación correcta.\nRegistros importados: ${imported.length}\nNo se han descartado repetidos.`);
 }
@@ -855,10 +882,11 @@ async function downloadExcel() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Edificios";
   const sheet = workbook.addWorksheet("Edificios");
-  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["fechaFabricacion", "Información"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
+  const client = clients.find((item) => item.id === activeClientId);
+  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["fechaFabricacion", "Información"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["cliente", "Cliente"], ["data1", "Datos 1"], ["data2", "Datos 2"], ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
   sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" || statusFields.includes(key) ? 12 : 40 }));
   for (const record of records) {
-    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, statusLabel(record[key])])), visto: record.visto ? "Sí" : "No" });
+    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, statusLabel(record[key])])), visto: record.visto ? "Sí" : "No", cliente: client?.name || "", data1: client?.data1 || "", data2: client?.data2 || "" });
     for (let index = 0; index < 2; index += 1) {
       const photo = record.photos?.[index];
       if (!photo) continue;
@@ -871,8 +899,7 @@ async function downloadExcel() {
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCC99" } };
   sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = "A1:O1";
-  const client = clients.find((item) => item.id === activeClientId);
+  sheet.autoFilter = "A1:R1";
   if (client) {
     const details = workbook.addWorksheet("Cliente");
     details.columns = [{ header: "Campo", key: "field", width: 22 }, { header: "Datos", key: "value", width: 60 }];
