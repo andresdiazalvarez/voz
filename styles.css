@@ -187,7 +187,7 @@ button {
 #clientHeading { font-size: 40px; line-height: 1.15; overflow-wrap: anywhere; }
 .statusGrid > div { display: grid; gap: 8px; font-weight: 850; }
 .statusButton { min-width: 64px; height: 44px; padding: 8px 14px; border-radius: 8px; }
-.statusNo { background: #ffb3b3; color: #601414; }
+.statusNo { background: #fff; color: var(--ink); border: 1px solid var(--line); }
 .statusYes { background: #155c32; color: #fff; }
 .statusOk { background: #0875cf; color: #fff; }
 .statusButton:disabled { cursor: wait; }
