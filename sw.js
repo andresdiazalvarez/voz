@@ -1,4 +1,4 @@
-const CACHE_NAME = "edificios-v17-datos-cliente-excel";
+const CACHE_NAME = "edificios-v18-cliente-primeras-columnas";
 const ASSETS = [
   "./",
   "./index.html",

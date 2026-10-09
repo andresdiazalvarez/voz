@@ -883,7 +883,7 @@ async function downloadExcel() {
   workbook.creator = "Edificios";
   const sheet = workbook.addWorksheet("Edificios");
   const client = clients.find((item) => item.id === activeClientId);
-  const columns = [["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["fechaFabricacion", "Información"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["cliente", "Cliente"], ["data1", "Datos 1"], ["data2", "Datos 2"], ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
+  const columns = [["cliente", "Cliente"], ["data1", "Datos 1"], ["data2", "Datos 2"], ["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["fechaFabricacion", "Información"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
   sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" || statusFields.includes(key) ? 12 : 40 }));
   for (const record of records) {
     const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, statusLabel(record[key])])), visto: record.visto ? "Sí" : "No", cliente: client?.name || "", data1: client?.data1 || "", data2: client?.data2 || "" });
@@ -900,14 +900,6 @@ async function downloadExcel() {
   sheet.eachRow((row) => { row.alignment = { vertical: "top", wrapText: true }; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
   sheet.autoFilter = "A1:R1";
-  if (client) {
-    const details = workbook.addWorksheet("Cliente");
-    details.columns = [{ header: "Campo", key: "field", width: 22 }, { header: "Datos", key: "value", width: 60 }];
-    details.addRow({ field: "Cliente", value: client.name });
-    details.addRow({ field: "Datos 1", value: client.data1 });
-    details.addRow({ field: "Datos 2", value: client.data2 });
-    details.eachRow((row) => { row.alignment = { wrapText: true, vertical: "top" }; });
-  }
   const blob = new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
