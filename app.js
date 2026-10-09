@@ -828,49 +828,64 @@ async function clearAllRecords() {
 }
 
 async function importExcelFile(file) {
-  if (!window.ExcelJS) return alert("No se ha cargado el lector de Excel.");
+  if (!window.ExcelJS) throw new Error("No se ha cargado el lector de Excel.");
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
   const sheet = workbook.worksheets[0];
-  if (!sheet) return alert("No encuentro ninguna hoja en ese Excel.");
-  const imported = [];
+  if (!sheet) throw new Error("El Excel no contiene hojas.");
   const headerMap = buildHeaderMap(sheet.getRow(1).values);
-  const clientDetails = {};
-  const clientColumns = [["name", "cliente"], ["data1", "datos1"], ["data2", "datos2"]];
+  if (!["cliente", "edificio", "ubicacion", "defectos", "numerosyco", "informacion", "recordar"].some((key) => headerMap[key])) {
+    throw new Error("No se encuentran las cabeceras del listado.");
+  }
+  const selected = clients.find((item) => item.id === activeClientId);
+  const legacyDetails = {};
+  const detailsSheet = workbook.getWorksheet("Cliente");
+  if (detailsSheet) detailsSheet.eachRow((row, number) => {
+    if (number === 1) return;
+    const key = normalizeHeader(excelCellToText(row.getCell(1).value));
+    legacyDetails[key] = excelCellToText(row.getCell(2).value).trim();
+  });
+  const groups = new Map();
+  let lastName = legacyDetails.cliente || selected?.name || "";
+  let importedCount = 0;
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const record = rowToImportedRecord(row.values, rowNumber, headerMap);
-    const hasData = fields.map((field) => record[field]).some((value) => safeText(value).trim()) || statusFields.some((key) => record[key]);
-    if (!hasData) return;
-    for (const [key, header] of clientColumns) {
-      if (!headerMap[header]) continue;
-      const value = excelCellToText(row.getCell(headerMap[header]).value).trim();
-      if (clientDetails[key] !== undefined && clientDetails[key] !== value) throw new Error("El Excel contiene datos de varios clientes. Importa un listado por cliente.");
-      clientDetails[key] = value;
+    const name = record.cliente.trim();
+    if (name) lastName = name;
+    const hasRecord = fields.some((key) => safeText(record[key]).trim()) || statusFields.some((key) => record[key]);
+    if (!hasRecord && !name) return;
+    const clientName = name || lastName || safeText(file.name).replace(/\.[^.]+$/, "") || "Cliente importado";
+    const groupKey = normalizeKeyPart(clientName);
+    if (!groups.has(groupKey)) groups.set(groupKey, { name: clientName, records: [] });
+    const group = groups.get(groupKey);
+    for (const [key, header] of [["data1", "datos1"], ["data2", "datos2"]]) {
+      const value = headerMap[header] ? excelCellToText(row.getCell(headerMap[header]).value).trim() : legacyDetails[header];
+      if (value !== undefined && (value || group[key] === undefined)) group[key] = value;
     }
-    imported.push(record);
+    if (hasRecord) {
+      record.cliente = clientName;
+      group.records.push(record);
+      importedCount += 1;
+    }
   });
-  if (!imported.length) {
-    $("importStatus").textContent = "No se encontraron registros para importar.";
-    return alert("No se encontraron registros para importar.");
+  if (!groups.size) throw new Error("No se encuentran clientes ni registros para importar.");
+  const nextClients = clients.map((client) => ({ ...client, records: [...client.records] }));
+  const importedIds = [];
+  for (const [key, group] of groups) {
+    let client = nextClients.find((item) => normalizeKeyPart(item.name) === key);
+    if (!client) {
+      client = { id: createId(), name: group.name, data1: "", data2: "", records: [] };
+      nextClients.push(client);
+    }
+    for (const key of ["data1", "data2"]) if (group[key] !== undefined) client[key] = group[key];
+    client.records = [...group.records, ...client.records];
+    importedIds.push(client.id);
   }
-  const client = clients.find((item) => item.id === activeClientId);
-  if (!client) throw new Error("Selecciona un cliente.");
-  const detailsSheet = workbook.getWorksheet("Cliente");
-  if (detailsSheet) detailsSheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return;
-    const entry = clientColumns.find(([, header]) => header === normalizeHeader(excelCellToText(row.getCell(1).value)));
-    if (entry && clientDetails[entry[0]] === undefined) clientDetails[entry[0]] = excelCellToText(row.getCell(2).value).trim();
-  });
-  const previous = { name: client.name, data1: client.data1, data2: client.data2, records };
-  if (clientDetails.name) client.name = clientDetails.name;
-  for (const key of ["data1", "data2"]) if (clientDetails[key] !== undefined) client[key] = clientDetails[key];
-  records = [...imported, ...records];
-  try { await saveRecords(); }
-  catch (error) { Object.assign(client, previous); records = previous.records; throw error; }
-  $("clientHeading").textContent = client.name;
-  $("importStatus").textContent = `Importados ${imported.length} registros. No se han descartado repetidos.`;
-  alert(`Importación correcta.\nRegistros importados: ${imported.length}\nNo se han descartado repetidos.`);
+  // Commit all clients together; a failed import leaves the current data intact.
+  await writeState(nextClients);
+  clients = nextClients;
+  return { ids: importedIds, count: importedCount };
 }
 
 function defectFlag(selected, defect) {
@@ -920,21 +935,34 @@ function bindEvents() {
   $("clearRecordsBtn").addEventListener("click", clearAllRecords);
   $("viewTableFromFormBtn").addEventListener("click", () => showView("list"));
   $("importExcelBtn").addEventListener("click", () => $("importExcelInput").click());
+  $("importClientsBtn").addEventListener("click", () => $("importExcelInput").click());
   $("importExcelInput").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     importing = true;
+    let result;
+    $("importExcelBtn").disabled = true;
+    $("importClientsBtn").disabled = true;
     try {
       $("importStatus").textContent = "Importando Excel...";
-      await importExcelFile(file);
-      renderTable();
+      $("clientsImportStatus").textContent = "Importando Excel...";
+      result = await importExcelFile(file);
     } catch (error) {
       console.error(error);
       $("importStatus").textContent = "No se ha podido importar el Excel.";
-      alert("No se ha podido importar el Excel. Revisa que tenga el mismo formato.");
+      $("clientsImportStatus").textContent = "No se ha podido importar el Excel.";
+      alert(error.message || "No se ha podido importar el Excel.");
     } finally {
       importing = false;
+      $("importExcelBtn").disabled = false;
+      $("importClientsBtn").disabled = false;
       event.target.value = "";
+    }
+    if (result) {
+      const message = `Importados ${result.count} registros en ${result.ids.length} clientes. Se conservan los repetidos.`;
+      $("clientsImportStatus").textContent = message;
+      if (result.ids.length === 1) { openClient(result.ids[0]); $("importStatus").textContent = message; }
+      else showView("clients");
     }
   });
   ["filterEdificio", "filterNumero", "filterSerie", "sortOrder", "seenFilter"].forEach((id) => {
