@@ -19,7 +19,8 @@
     <main>
       <section id="clientsView">
         <h1>Clientes</h1>
-        <button id="importClientsBtn" class="secondary">Importar Excel</button>
+        <p id="storageStatus" class="clientsImportStatus" role="status"></p>
+        <button id="importClientsBtn" class="secondary" disabled>Importar Excel</button>
         <p id="clientsImportStatus" class="clientsImportStatus" role="status"></p>
         <div id="clientsList" class="clientsList"></div>
         <form id="newClientForm" class="clientCard">
@@ -27,7 +28,7 @@
           <label>Nombre del cliente<input id="newClientName" required maxlength="150" /></label>
           <label>Datos 1<textarea id="newClientData1" rows="2"></textarea></label>
           <label>Datos 2<textarea id="newClientData2" rows="2"></textarea></label>
-          <button type="submit" class="primary">Crear cliente</button>
+          <button type="submit" id="createClientBtn" class="primary" disabled>Crear cliente</button>
         </form>
       </section>
       <section id="homeView" class="hero hidden">

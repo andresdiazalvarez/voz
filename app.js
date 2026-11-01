@@ -60,6 +60,9 @@ let currentPhotos = ["", ""];
 let clients = [];
 let activeClientId = null;
 let importing = false;
+let storageQueue = Promise.resolve();
+const CLIENTS_KEY = "clients-v1";
+const BACKUP_KEY = `edificios-clients-backup-v1:${new URL(".", window.location.href).pathname}`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -173,8 +176,13 @@ function rowToImportedRecord(rowValues, index, headerMap = {}) {
 function openDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
-    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
+    };
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -184,26 +192,90 @@ async function readState(key = "records") {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");
     const request = tx.objectStore(STORE_NAME).get(key);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => { db.close(); resolve(request.result ?? null); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error("No se pueden leer los datos guardados.")); };
   });
 }
 
-async function writeState(value, key = "clients-v1") {
+function showStorageStatus(message) {
+  const element = $("storageStatus");
+  if (element) element.textContent = message;
+}
+
+function readLocalBackup() {
+  try {
+    const backup = JSON.parse(localStorage.getItem(BACKUP_KEY));
+    if (backup?.version === 1 && Array.isArray(backup.clients)) return backup;
+  } catch {}
+  return null;
+}
+
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
+  } catch {}
+}
+
+async function writeDatabase(value, key) {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
+    let tx;
+    try { tx = db.transaction(STORE_NAME, "readwrite", { durability: "strict" }); }
+    catch { tx = db.transaction(STORE_NAME, "readwrite"); }
     tx.objectStore(STORE_NAME).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error || new Error("No se han guardado los datos."));
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error("No se han guardado los datos.")); };
   });
+}
+
+function writeState(value, key = CLIENTS_KEY) {
+  // Snapshot and serialize writes so older asynchronous saves cannot win a race.
+  const serialized = JSON.stringify(value);
+  const snapshot = JSON.parse(serialized);
+  const task = storageQueue.then(async () => {
+    showStorageStatus("Guardando datos…");
+    let databaseError;
+    try {
+      await writeDatabase(snapshot, key);
+      const saved = await readState(key);
+      if (JSON.stringify(saved) !== serialized) throw new Error("No se ha podido comprobar el guardado.");
+    } catch (error) { databaseError = error; }
+    let backupSaved = false;
+    if (key === CLIENTS_KEY) {
+      try {
+        const backup = JSON.stringify({ version: 1, savedAt: new Date().toISOString(), databaseConfirmed: !databaseError, clients: snapshot });
+        localStorage.setItem(BACKUP_KEY, backup);
+        backupSaved = localStorage.getItem(BACKUP_KEY) === backup;
+      } catch {
+        // A previous fallback must not override a newer successful database save.
+        if (!databaseError) try { localStorage.removeItem(BACKUP_KEY); } catch {}
+      }
+    }
+    if (databaseError && !backupSaved) {
+      showStorageStatus("No se han guardado los cambios. Descarga el Excel antes de salir.");
+      throw databaseError;
+    }
+    showStorageStatus(databaseError ? "Datos guardados en la copia local de este dispositivo." : "Datos guardados en este dispositivo.");
+  });
+  storageQueue = task.catch(() => {});
+  return task;
 }
 
 async function loadRecords() {
-  const savedClients = await readState("clients-v1");
+  let savedClients;
+  try { savedClients = await readState(CLIENTS_KEY); }
+  catch (error) { if (!readLocalBackup()) throw error; }
+  const backup = readLocalBackup();
+  if (backup && (!Array.isArray(savedClients) || backup.databaseConfirmed === false)) {
+    savedClients = backup.clients;
+    await writeState(savedClients);
+    showStorageStatus("Datos recuperados de la copia local.");
+  }
   if (Array.isArray(savedClients)) {
     clients = savedClients.map((client) => ({ ...client, records: (client.records || []).map(cleanRecord) }));
+    if (!$("storageStatus")?.textContent) showStorageStatus("Datos recuperados de este dispositivo.");
     return;
   }
   // Keep the legacy record key intact while creating the client-based storage.
@@ -934,8 +1006,9 @@ function bindEvents() {
   $("downloadExcelFromTableBtn").addEventListener("click", downloadExcel);
   $("clearRecordsBtn").addEventListener("click", clearAllRecords);
   $("viewTableFromFormBtn").addEventListener("click", () => showView("list"));
-  $("importExcelBtn").addEventListener("click", () => $("importExcelInput").click());
-  $("importClientsBtn").addEventListener("click", () => $("importExcelInput").click());
+  const chooseExcel = () => { requestPersistentStorage(); $("importExcelInput").click(); };
+  $("importExcelBtn").addEventListener("click", chooseExcel);
+  $("importClientsBtn").addEventListener("click", chooseExcel);
   $("importExcelInput").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -969,7 +1042,10 @@ function bindEvents() {
     $(id).addEventListener("input", renderTable);
     $(id).addEventListener("change", renderTable);
   });
-  $("recordForm").addEventListener("submit", saveForm);
+  $("recordForm").addEventListener("submit", async (event) => {
+    try { await saveForm(event); }
+    catch { alert("No se han guardado los cambios. Descarga el Excel antes de salir y revisa el almacenamiento del navegador."); }
+  });
   $("deleteBtn").addEventListener("click", deleteCurrent);
   [0, 1].forEach((index) => {
     $(`photoInput${index + 1}`).addEventListener("change", async (event) => {
@@ -997,6 +1073,12 @@ async function init() {
   bindEvents();
   updateStats();
   showView("clients");
+  $("importClientsBtn").disabled = false;
+  $("createClientBtn").disabled = false;
+  document.body.dataset.ready = "true";
+  window.addEventListener("beforeunload", (event) => {
+    if (importing || $("storageStatus")?.textContent === "Guardando datos…") { event.preventDefault(); event.returnValue = ""; }
+  });
 }
 
 init().catch(() => alert("No se han podido cargar los clientes guardados. Recarga la aplicación."));
