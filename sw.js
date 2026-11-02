@@ -1,4 +1,4 @@
-const CACHE_NAME = "edificios-v22-guardar-dentro-cliente";
+const CACHE_NAME = "edificios-v24-datos-por-registro";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,7 +11,7 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: "reload" })))));
   self.skipWaiting();
 });
 
@@ -25,5 +25,22 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    try {
+      const response = await fetch(event.request, { cache: "no-cache" });
+      if (response.ok) {
+        await cache.put(event.request, response.clone());
+        return response;
+      }
+      return (await cache.match(event.request)) || response;
+    } catch (error) {
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      throw error;
+    }
+  })());
 });

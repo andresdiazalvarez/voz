@@ -251,7 +251,7 @@ textarea { resize: vertical; }
 table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 680px;
+  min-width: 2200px;
 }
 
 th, td {
@@ -293,6 +293,7 @@ td { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 280px; }
 .pending { color: #a15a00; }
 
 .editBtn {
+  white-space: nowrap;
   background: var(--red);
   color: #ffffff;
   padding: 10px 14px;

@@ -17,6 +17,7 @@ const defectOptions = [
 ];
 
 const fields = ["edificio", "ubicacion", "fechaFabricacion", "cantidad", "numeroSerie", "observaciones"];
+const rowDetailFields = ["data1", "data2"];
 const statusFields = ["det", "cex", "rxt", "gru", "red", "mon"];
 
 function statusValue(value) {
@@ -86,6 +87,7 @@ function cleanRecord(record = {}) {
     id: record.id || createId(),
     ...Object.fromEntries(statusFields.map((key) => [key, statusValue(record[key])])),
     cliente: safeText(record.cliente),
+    ...Object.fromEntries(rowDetailFields.filter((key) => Object.prototype.hasOwnProperty.call(record, key)).map((key) => [key, safeText(record[key])])),
     edificio: safeText(record.edificio ?? record.edificioCodigo),
     cantidad: safeText(record.cantidad),
     ubicacion: safeText(record.ubicacion),
@@ -156,6 +158,7 @@ function importedValue(rowValues, headerMap, keys, fallbackCol) {
 
 function rowToImportedRecord(rowValues, index, headerMap = {}) {
   return cleanRecord({
+    ...Object.fromEntries(rowDetailFields.filter((key, index) => headerMap[`datos${index + 1}`]).map((key) => [key, importedValue(rowValues, headerMap, [key === "data1" ? "datos1" : "datos2"])])),
     id: `import-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
     cliente: importedValue(rowValues, headerMap, ["cliente"], 1),
     edificio: importedValue(rowValues, headerMap, ["edificio"], 2),
@@ -304,8 +307,8 @@ async function saveClientData() {
   if (importing) return;
   const client = clients.find((item) => item.id === activeClientId);
   if (!client) return;
-  const buttons = [$("saveClientBtn")];
-  const statuses = [$("saveClientStatus")];
+  const buttons = [$("saveClientBtn"), $("saveHomeDataBtn")];
+  const statuses = [$("saveClientStatus"), $("saveHomeDataStatus")];
   for (const button of buttons) { button.disabled = true; button.textContent = "Guardando…"; }
   for (const status of statuses) status.textContent = "Guardando datos…";
   try {
@@ -316,7 +319,7 @@ async function saveClientData() {
   } catch {
     for (const status of statuses) status.textContent = "No se han guardado los datos. Vuelve a intentarlo o descarga el Excel antes de salir.";
   } finally {
-    for (const button of buttons) { button.disabled = false; button.textContent = "Guardar datos"; }
+    for (const button of buttons) { button.disabled = false; button.textContent = button.id === "saveHomeDataBtn" ? "Guardar datos del cliente" : "Guardar datos"; }
   }
 }
 
@@ -333,6 +336,7 @@ function openClient(id) {
   $("seenFilter").value = "all";
   $("importStatus").textContent = "";
   $("saveClientStatus").textContent = "";
+  $("saveHomeDataStatus").textContent = "";
   updateStats();
   showView("home");
 }
@@ -496,7 +500,8 @@ function renderTable() {
     const client = clients.find((item) => item.id === activeClientId);
     for (const key of ["name", "data1", "data2"]) {
       const cell = document.createElement("td");
-      cell.textContent = safeText(client?.[key]) || "-";
+      cell.textContent = safeText(key === "name" ? client?.name : record[key] ?? client?.[key]) || "-";
+      if (key !== "name") cell.onclick = () => { openForm(record.id); $(key).focus(); };
       row.append(cell);
     }
     for (let index = 0; index < 2; index += 1) {
@@ -868,6 +873,8 @@ function openForm(id = null) {
   $("formKicker").textContent = record ? "REGISTRO EXISTENTE" : "NUEVO REGISTRO";
   $("deleteBtn").classList.toggle("hidden", !record);
   for (const key of fields) $(key).value = safeText(record?.[key]);
+  const client = clients.find((item) => item.id === activeClientId);
+  for (const key of rowDetailFields) $(key).value = safeText(record?.[key] ?? client?.[key]);
   $("visto").checked = Boolean(record?.visto);
   for (const key of statusFields) setStatusButton($(key), record?.[key], key.toUpperCase());
   setPhotoPreview(0, record?.photos?.[0] || "");
@@ -879,6 +886,7 @@ function collectForm() {
   const record = { ...records.find((item) => item.id === $("recordId").value), id: $("recordId").value || createId(), origen: $("recordId").value ? "editado" : "manual" };
   const existingRecord = records.find((item) => item.id === record.id);
   for (const key of fields) record[key] = $(key).value.trim();
+  for (const key of rowDetailFields) record[key] = $(key).value;
   record.visto = $("visto").checked;
   for (const key of statusFields) record[key] = statusValue($(key).dataset.status);
   record.photos = [...currentPhotos];
@@ -953,15 +961,18 @@ async function importExcelFile(file) {
     const record = rowToImportedRecord(row.values, rowNumber, headerMap);
     const name = record.cliente.trim();
     if (name) lastName = name;
-    const hasRecord = fields.some((key) => safeText(record[key]).trim()) || statusFields.some((key) => record[key]);
+    const hasRecord = [...fields, ...rowDetailFields].some((key) => safeText(record[key]).trim()) || statusFields.some((key) => record[key]);
     if (!hasRecord && !name) return;
     const clientName = name || lastName || safeText(file.name).replace(/\.[^.]+$/, "") || "Cliente importado";
     const groupKey = normalizeKeyPart(clientName);
-    if (!groups.has(groupKey)) groups.set(groupKey, { name: clientName, records: [] });
+    if (!groups.has(groupKey)) groups.set(groupKey, { name: clientName, records: [], detailValues: { data1: new Set(), data2: new Set() } });
     const group = groups.get(groupKey);
     for (const [key, header] of [["data1", "datos1"], ["data2", "datos2"]]) {
-      const value = headerMap[header] ? excelCellToText(row.getCell(headerMap[header]).value).trim() : legacyDetails[header];
-      if (value !== undefined && (value || group[key] === undefined)) group[key] = value;
+      const value = headerMap[header] ? excelCellToText(row.getCell(headerMap[header]).value) : legacyDetails[header];
+      if (value !== undefined) {
+        record[key] = value;
+        group.detailValues[key].add(value);
+      }
     }
     if (hasRecord) {
       record.cliente = clientName;
@@ -978,7 +989,10 @@ async function importExcelFile(file) {
       client = { id: createId(), name: group.name, data1: "", data2: "", records: [] };
       nextClients.push(client);
     }
-    for (const key of ["data1", "data2"]) if (group[key] !== undefined) client[key] = group[key];
+    for (const key of rowDetailFields) {
+      const values = group.detailValues[key];
+      if (values.size === 1) client[key] = [...values][0];
+    }
     client.records = [...group.records, ...client.records];
     importedIds.push(client.id);
   }
@@ -1001,7 +1015,7 @@ async function downloadExcel() {
   const columns = [["cliente", "Cliente"], ["data1", "Datos 1"], ["data2", "Datos 2"], ["edificio", "Edificio"], ["visto", "Visto"], ["ubicacion", "Ubicación"], ["fechaFabricacion", "Información"], ["cantidad", "Defectos"], ["numeroSerie", "Recordar"], ["observaciones", "Observaciones"], ...statusFields.map((key) => [key, key.toUpperCase()]), ["foto1", "Foto 1"], ["foto2", "Foto 2"]];
   sheet.columns = columns.map(([key, header]) => ({ key, header, width: key === "visto" || statusFields.includes(key) ? 12 : 40 }));
   for (const record of records) {
-    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, statusLabel(record[key])])), visto: record.visto ? "Sí" : "No", cliente: client?.name || "", data1: client?.data1 || "", data2: client?.data2 || "" });
+    const row = sheet.addRow({ ...Object.fromEntries(fields.map((key) => [key, safeText(record[key])])), ...Object.fromEntries(statusFields.map((key) => [key, statusLabel(record[key])])), visto: record.visto ? "Sí" : "No", cliente: client?.name || "", data1: record.data1 ?? client?.data1 ?? "", data2: record.data2 ?? client?.data2 ?? "" });
     for (let index = 0; index < 2; index += 1) {
       const photo = record.photos?.[index];
       if (!photo) continue;
@@ -1026,6 +1040,7 @@ async function downloadExcel() {
 
 function bindEvents() {
   $("saveClientBtn").addEventListener("click", saveClientData);
+  $("saveHomeDataBtn").addEventListener("click", saveClientData);
   $("newClientForm").addEventListener("submit", createClient);
   for (const key of statusFields) bindStatusButton($(key), () => statusValue($(key).dataset.status), (value) => setStatusButton($(key), value, key.toUpperCase()));
   $("openListBtn").addEventListener("click", () => showView("list"));
@@ -1094,7 +1109,10 @@ function bindEvents() {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+      .then((registration) => registration.update()).catch(() => {});
+  });
 }
 
 async function init() {
