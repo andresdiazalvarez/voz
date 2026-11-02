@@ -300,6 +300,26 @@ async function saveRecords() {
   updateStats();
 }
 
+async function saveClientData() {
+  if (importing) return;
+  const client = clients.find((item) => item.id === activeClientId);
+  if (!client) return;
+  const buttons = [$("saveClientBtn")];
+  const statuses = [$("saveClientStatus")];
+  for (const button of buttons) { button.disabled = true; button.textContent = "Guardando…"; }
+  for (const status of statuses) status.textContent = "Guardando datos…";
+  try {
+    if (!$("formView").classList.contains("hidden")) await saveForm({ preventDefault() {} }, true);
+    else await saveRecords();
+    const message = `Datos guardados: ${client.name}, ${client.records.length} registros.`;
+    for (const status of statuses) status.textContent = message;
+  } catch {
+    for (const status of statuses) status.textContent = "No se han guardado los datos. Vuelve a intentarlo o descarga el Excel antes de salir.";
+  } finally {
+    for (const button of buttons) { button.disabled = false; button.textContent = "Guardar datos"; }
+  }
+}
+
 function openClient(id) {
   if (importing) return;
   const client = clients.find((item) => item.id === id);
@@ -307,10 +327,12 @@ function openClient(id) {
   activeClientId = id;
   records = client.records;
   $("clientHeading").textContent = client.name;
+  $("activeClientLabel").textContent = client.name;
   for (const field of ["filterEdificio", "filterNumero", "filterSerie"]) $(field).value = "";
   $("sortOrder").value = "none";
   $("seenFilter").value = "all";
   $("importStatus").textContent = "";
+  $("saveClientStatus").textContent = "";
   updateStats();
   showView("home");
 }
@@ -390,6 +412,7 @@ function updateStats() {
 
 function showView(name) {
   if (importing && name === "clients") return;
+  $("clientSaveBar").classList.toggle("hidden", name === "clients" || !activeClientId);
   $("clientsView").classList.toggle("hidden", name !== "clients");
   $("homeView").classList.toggle("hidden", name !== "home");
   $("listView").classList.toggle("hidden", name !== "list");
@@ -863,7 +886,7 @@ function collectForm() {
   return cleanRecord(record);
 }
 
-async function saveForm(event) {
+async function saveForm(event, stay = false) {
   event.preventDefault();
   const record = collectForm();
   const isNewRecord = !$("recordId").value;
@@ -872,7 +895,12 @@ async function saveForm(event) {
   else records.unshift(record);
   if (record.cantidad) localStorage.setItem(LAST_NUMBER_KEY, record.cantidad);
   await saveRecords();
-  if (isNewRecord) openForm();
+  if (stay) {
+    $("recordId").value = record.id;
+    $("formTitle").textContent = "Ver y corregir registro";
+    $("deleteBtn").classList.remove("hidden");
+  }
+  else if (isNewRecord) openForm();
   else showView("list");
 }
 
@@ -997,6 +1025,7 @@ async function downloadExcel() {
 }
 
 function bindEvents() {
+  $("saveClientBtn").addEventListener("click", saveClientData);
   $("newClientForm").addEventListener("submit", createClient);
   for (const key of statusFields) bindStatusButton($(key), () => statusValue($(key).dataset.status), (value) => setStatusButton($(key), value, key.toUpperCase()));
   $("openListBtn").addEventListener("click", () => showView("list"));

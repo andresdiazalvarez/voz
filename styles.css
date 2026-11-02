@@ -233,6 +233,13 @@ textarea { resize: vertical; }
   gap: 12px;
 }
 
+.clientSaveBar { position: sticky; top: 0; z-index: 15; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; margin-bottom: 20px; padding: 12px 16px; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 3px 12px #0002; }
+.clientSaveBar strong { overflow-wrap: anywhere; }
+.clientSaveBar .primary { margin: 0; width: auto; min-height: 48px; }
+.clientSaveBar p { grid-column: 1 / -1; margin: 0; font-size: 14px; }
+.clientSaveBar p:empty { display: none; }
+@media (max-width: 420px) { .clientSaveBar { grid-template-columns: minmax(0, 1fr); } .clientSaveBar .primary { width: 100%; } }
+
 .tableWrap {
   overflow: auto;
   background: #fff;

@@ -1,4 +1,4 @@
-const CACHE_NAME = "edificios-v20-guardado-verificado";
+const CACHE_NAME = "edificios-v22-guardar-dentro-cliente";
 const ASSETS = [
   "./",
   "./index.html",
