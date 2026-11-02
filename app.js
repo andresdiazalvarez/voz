@@ -372,6 +372,31 @@ function renderClients() {
     save.className = "secondary";
     save.textContent = "Guardar datos del cliente";
     form.append(save);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger";
+    remove.textContent = "Eliminar cliente";
+    remove.setAttribute("aria-label", `Eliminar cliente ${client.name}`);
+    remove.onclick = async () => {
+      if (importing) return;
+      if (!confirm(`¿Eliminar el cliente "${client.name}" y sus ${client.records.length} registros? Esta acción no se puede deshacer.`)) return;
+      remove.disabled = true;
+      save.disabled = true;
+      open.disabled = true;
+      const remaining = clients.filter((item) => item.id !== client.id);
+      try {
+        await writeState(remaining);
+        clients = remaining;
+        renderClients();
+        $("clientsImportStatus").textContent = `Cliente eliminado: ${client.name}.`;
+      } catch {
+        alert("No se ha podido eliminar el cliente. Sus datos se conservan.");
+        remove.disabled = false;
+        save.disabled = false;
+        open.disabled = false;
+      }
+    };
+    form.append(remove);
     form.onsubmit = async (event) => {
       event.preventDefault();
       const name = inputs.name.value.trim();
@@ -379,7 +404,7 @@ function renderClients() {
       const previous = { name: client.name, data1: client.data1, data2: client.data2 };
       save.disabled = true;
       Object.assign(client, { name, data1: inputs.data1.value.trim(), data2: inputs.data2.value.trim() });
-      try { await writeState(clients); open.textContent = name; save.textContent = "Datos guardados"; }
+      try { await writeState(clients); open.textContent = name; remove.setAttribute("aria-label", `Eliminar cliente ${name}`); save.textContent = "Datos guardados"; }
       catch { Object.assign(client, previous); alert("No se han podido guardar los datos del cliente."); }
       finally { save.disabled = false; }
     };
